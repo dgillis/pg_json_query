@@ -42,4 +42,48 @@ returns boolean language sql immutable as $$
 $$;
 
 
+-- Regular query:
+--
+-- explain
+-- select *
+-- from test_table
+-- where x = 3
+-- order by obj->>'idx'
+-- limit 10;
+-- #=>
+--                                            QUERY PLAN                                            
+-- -------------------------------------------------------------------------------------------------
+--  Limit  (cost=42.29..42.32 rows=10 width=82)
+--    ->  Sort  (cost=42.29..42.32 rows=10 width=82)
+--          Sort Key: ((obj ->> 'idx'::text))
+--          ->  Bitmap Heap Scan on test_table  (cost=4.50..42.13 rows=10 width=82)
+--                Recheck Cond: (x = 3)
+--                ->  Bitmap Index Scan on test_table_x_expr_idx  (cost=0.00..4.49 rows=10 width=0)
+--                      Index Cond: (x = 3)
+-- (7 rows)
 
+-- Time: 0.562 ms
+
+
+
+-- Using json_query.filter - same query plan.
+--
+-- explain
+-- select *
+-- from test_table
+-- where json_query.filter(test_table, '{"x": 3}')
+-- order by obj->>'idx'
+-- limit 10;
+-- #=> 
+--                                            QUERY PLAN                                            
+-- -------------------------------------------------------------------------------------------------
+--  Limit  (cost=42.29..42.32 rows=10 width=82)
+--    ->  Sort  (cost=42.29..42.32 rows=10 width=82)
+--          Sort Key: ((obj ->> 'idx'::text))
+--          ->  Bitmap Heap Scan on test_table  (cost=4.50..42.13 rows=10 width=82)
+--                Recheck Cond: (x = 3)
+--                ->  Bitmap Index Scan on test_table_x_expr_idx  (cost=0.00..4.49 rows=10 width=0)
+--                      Index Cond: (x = 3)
+-- (7 rows)
+
+-- Time: 2.185 ms
