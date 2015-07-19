@@ -112,7 +112,7 @@ $$;
 -- exists
 create or replace function json_query._exists(col anyelement, filt jsonb, _coltyp anyelement default null)
 returns boolean language sql immutable as $$
-  select col ? filt->>'value';
+  select col ? (filt->>'value');
 $$;
 
 
