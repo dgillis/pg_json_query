@@ -126,34 +126,6 @@ as $$
 $$;
 
 
-/*
-create or replace function json_query.column_expr(row_ anyelement, fldexpr jsonb)
-returns jsonb
-language sql immutable
-as $$
-  select case jsonb_typeof(fldexpr)
-    when 'array' then
-      case jsonb_array_length(fldexpr)
-        when 0 then '[]'
-        when 1 then json_query._build_array(
-          json_query.column_value(row_, fldexpr->>0)
-        )
-        when 2 then json_query._build_array(
-          json_query.column_value(row_, fldexpr->>0),
-          json_query.column_value(row_, fldexpr->>1)
-        )
-        else
-          (select coalesce(json_agg(json_query.column_value(row_, el) order by idx), '[]')::jsonb
-           from jsonb_array_elements_text(fldexpr) with ordinality o(el, idx))
-        end
-    else
-      json_query.column_value(row_, json_query._json_string_to_text(fldexpr))
-    end;
-$$;
-*/
-
-
-
 create or replace function json_query._column_expr_jsonb_arr(row_ anyelement, arr jsonb)
 returns jsonb
 language sql immutable
@@ -161,55 +133,6 @@ as $$
   select coalesce(json_agg(json_query.column_value(row_, el) order by idx)::jsonb, '[]')
   from jsonb_array_elements_text(arr) with ordinality o(el, idx);
 $$;
-  
-
-/*
-create or replace function json_query.column_expr(row_ anyelement, fldexpr jsonb)
-returns jsonb
-language sql immutable
-as $$
-  select case jsonb_typeof(fldexpr)
-    when 'array' then
-      case jsonb_array_length(fldexpr)
-        when 0 then
-          '[]'
-        when 1 then
-           json_query._build_array(json_query.column_value(row_, fldexpr->>0))
-        when 2 then
-           json_query._build_array(
-             json_query.column_value(row_, fldexpr->>0),
-             json_query.column_value(row_, fldexpr->>1)
-           )::jsonb
-        when 3 then
-           json_query._build_array(
-             json_query.column_value(row_, fldexpr->>0),
-             json_query.column_value(row_, fldexpr->>1),
-             json_query.column_value(row_, fldexpr->>2)
-           )
-        when 4 then
-           json_query._build_array(
-             json_query.column_value(row_, fldexpr->>0),
-             json_query.column_value(row_, fldexpr->>1),
-             json_query.column_value(row_, fldexpr->>2),
-             json_query.column_value(row_, fldexpr->>3)
-           )
-        when 5 then
-           json_query._build_array(
-             json_query.column_value(row_, fldexpr->>0),
-             json_query.column_value(row_, fldexpr->>1),
-             json_query.column_value(row_, fldexpr->>2),
-             json_query.column_value(row_, fldexpr->>3),
-             json_query.column_value(row_, fldexpr->>4)
-           )
-        else
-          null
-          --json_query._column_expr_jsonb_arr(row_, fldexpr)
-        end
-    else
-      json_query.column_value(row_, json_query._json_string_to_text(fldexpr))
-    end;
-$$;
-*/
 
 
 create or replace function json_query.column_expr(row_ anyelement, fldexpr jsonb)
@@ -250,8 +173,7 @@ as $$
              json_query._col_value_impl(null::jsonb, row_, fldexpr->>4)
            )
         else
-          null
-          --json_query._column_expr_jsonb_arr(row_, fldexpr)
+          json_query._column_expr_jsonb_arr(row_, fldexpr)
         end
     else
       json_query.column_value(row_, json_query._json_string_to_text(fldexpr))
