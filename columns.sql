@@ -198,3 +198,47 @@ as $$
       false
     end;
 $$;
+
+
+
+create or replace function json_query._column_extract_path(col jsonb, path_ text)
+returns jsonb language sql immutable as $$ select col->path_; $$;
+
+create or replace function json_query._column_extract_path_text(col jsonb, path_ text)
+returns text language sql immutable as $$ select col->>path_; $$;
+
+create or replace function json_query._column_extract_path(col jsonb, path_ text[])
+returns jsonb language sql immutable as $$ select col#>path_; $$;
+
+create or replace function json_query._column_extract_path_text(col jsonb, path_ text[])
+returns text language sql immutable as $$ select col#>>path_; $$;
+
+create or replace function json_query._column_extract_path(col jsonb, path_ jsonb)
+returns jsonb language sql immutable as $$
+  select case jsonb_typeof(path_)
+    when 'array' then
+      json_query._column_extract_path(col, json_query._jsonb_arr_to_text_arr(path_))
+    else
+      json_query._column_extract_path(col, json_query._json_string_to_text(path_))
+    end;
+$$;
+
+create or replace function json_query._column_extract_path_text(col jsonb, path_ jsonb)
+returns text language sql immutable as $$
+  select case jsonb_typeof(path_)
+    when 'array' then
+      json_query._column_extract_path_text(col, json_query._jsonb_arr_to_text_arr(path_))
+    else
+      json_query._column_extract_path_text(col, json_query._json_string_to_text(path_))
+    end;
+$$;
+
+create or replace function json_query._column_extract_path(col json, path_ anyelement)
+returns json language sql immutable as $$
+  select json_query._column_extract_path(col::jsonb, path_)::json;
+$$;
+
+create or replace function json_query._column_extract_path_text(col json, path_ anyelement)
+returns text language sql immutable as $$
+  select json_query._column_extract_path(col::jsonb, path_)::text;
+$$;

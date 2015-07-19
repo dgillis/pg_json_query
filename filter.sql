@@ -1,110 +1,10 @@
 
-create or replace function json_query._apply_filter(
-  col anyelement,
-  qual jsonb,
-  -- Since all of the _cast_column_value(col, val) functions only need
-  -- the type info of the column, by always passing null as the column
-  -- you can make it easier to Postgres to optimize.            
-  _coltype anyelement default null
-)
+
+create or replace function json_query._apply_filter(col anyelement, filt jsonb,
+                                                    _coltyp anyelement default null)
 returns boolean
 language sql immutable
-as $$
-  select
-    case qual->>'op'
-      when 'eq' then
-        case 
-          when qual->'value' = 'null' then
-            col is null
-          else
-            col = json_query._cast_column_value(_coltype, qual->'value')
-          end
-      when 'ne' then
-        case
-          when qual->'value' = 'null' then
-            col is not null
-          else
-            col != json_query._cast_column_value(_coltype, qual->'value')
-          end
-      when 'gt' then col >  json_query._cast_column_value(_coltype, qual->'value')
-      when 'lt' then col <  json_query._cast_column_value(_coltype, qual->'value')
-      when 'ge' then col >= json_query._cast_column_value(_coltype, qual->'value')
-      when 'le' then col <= json_query._cast_column_value(_coltype, qual->'value')
-      /*
-      when 'in' then json_query._col_in_jsonb(col, qual->'value')
-      when 'notin' then not json_query._col_in_jsonb(col, qual->'value')
-      when 'like' then
-        json_query._force_text(col) like qual->>'value'
-      when 'ilike' then
-        json_query._force_text(col) ilike qual->>'value'
-      when 'startswith' then
-        json_query._force_text(col) like (qual->>'value') || '%'
-      when 'istartswith' then
-        json_query._force_text(col) ilike (qual->>'value') || '%'
-
-      when 'exists' then
-        -- Presumably col is JSON
-        col ? (qual->>'value')
-      when 'notexists' then
-        not (col ? (qual->>'value'))
-        */
-      else
-        false
-      end
-$$;
-
-
-/*
-_apply_filter_to_col_path(col, path<text|text[]|jsonb>, is_text, filt)
-*/
-create or replace function json_query._apply_filter_to_col_path(
-  col jsonb, path_ text, is_text boolean, filt anyelement
-) returns boolean language sql immutable as $$
-  select case
-    when is_text then
-      json_query._apply_filter(col->>path_, filt, null::text)
-    else
-      -- Note: third param needed to ensure the "anyelement"
-      -- rather than "jsonb" implementation of _apply_filter()
-      -- is invoked.
-      json_query._apply_filter(col->path_, filt, null::jsonb)
-    end;
-$$;
-
-create or replace function json_query._apply_filter_to_col_path(
-  col jsonb, path_ text[], is_text boolean, filt anyelement
-) returns boolean language sql immutable as $$
-  select case
-    when is_text then
-      json_query._apply_filter(col#>>path_, filt, null::text)
-    else
-      -- Note: third param needed to ensure the "anyelement"
-      -- rather than "jsonb" implementation of _apply_filter()
-      -- is invoked.
-      json_query._apply_filter(col#>path_, filt, null::jsonb)
-    end;
-$$;
-
-create or replace function json_query._apply_filter_to_col_path(
-  col jsonb, path_ jsonb, is_text boolean, filt anyelement
-) returns boolean language sql immutable as $$
-  select case jsonb_typeof(path_)
-    when 'array' then
-      json_query._apply_filter_to_col_path(
-        col,
-        json_query._jsonb_arr_to_text_arr(path_),
-        is_text,
-        filt
-      )
-    else
-      json_query._apply_filter_to_col_path(
-        col,
-        json_query._json_string_to_text(path_),
-        is_text,
-        filt
-      )
-    end;
-$$;
+as $$ select json_query._apply_op(filt->>'op', col, filt); $$;
 
 
 
@@ -118,9 +18,18 @@ as $$
   select case
     when filt->'path' = 'null' then
       json_query._apply_filter(col, filt, null::jsonb)
+    when filt->'path_is_text' = 'true' then
+      json_query._apply_filter(
+        json_query._column_extract_path_text(col, filt->'path'),
+        filt,
+        null
+      )
     else
-      json_query._apply_filter_to_col_path(
-        col, col->'path', col->'path_is_text' = 'true', filt)
+      json_query._apply_filter(
+        json_query._column_extract_path(col, filt->'path'),
+        filt,
+        null
+      )
     end;
 $$;
 

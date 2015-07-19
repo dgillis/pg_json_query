@@ -42,6 +42,30 @@ returns boolean language sql immutable as $$
 $$;
 
 
+create or replace function json_query._col_value_impl(valtype text, tt test_table, fld text)
+returns text language sql immutable as $$
+  select case fld
+    when 'id' then tt.id::text
+    when 'x' then tt.x::text
+    when 'y' then tt.y::text
+    when 'obj' then tt.obj::text
+    else null
+  end;
+$$;
+
+
+create or replace function json_query._col_value_impl(valtype jsonb, tt test_table, fld text)
+returns jsonb language sql immutable as $$
+  select case fld
+    when 'id' then to_json(tt.id)::jsonb
+    when 'x' then to_json(tt.x)::jsonb
+    when 'y' then to_json(tt.y)::jsonb
+    when 'obj' then tt.obj
+    else null
+  end;
+$$;
+
+
 -- Regular query:
 --
 -- explain
