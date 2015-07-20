@@ -116,7 +116,7 @@ $f$;
 
 
 
-create or replace function json_query._col_in_jsonb_arr(
+create function json_query._col_in_jsonb_arr(
   col anyelement,
   arr jsonb,
   _coltype anyelement default null
@@ -182,7 +182,7 @@ as $$
 $$;
 
 
-create or replace function json_query._col_in_jsonb(
+create function json_query._col_in_jsonb(
   col anyelement,
   arr_or_obj jsonb
 )
@@ -201,19 +201,19 @@ $$;
 
 
 
-create or replace function json_query._column_extract_path(col jsonb, path_ text)
+create function json_query._column_extract_path(col jsonb, path_ text)
 returns jsonb language sql immutable as $$ select col->path_; $$;
 
-create or replace function json_query._column_extract_path_text(col jsonb, path_ text)
+create function json_query._column_extract_path_text(col jsonb, path_ text)
 returns text language sql immutable as $$ select col->>path_; $$;
 
-create or replace function json_query._column_extract_path(col jsonb, path_ text[])
+create function json_query._column_extract_path(col jsonb, path_ text[])
 returns jsonb language sql immutable as $$ select col#>path_; $$;
 
-create or replace function json_query._column_extract_path_text(col jsonb, path_ text[])
+create function json_query._column_extract_path_text(col jsonb, path_ text[])
 returns text language sql immutable as $$ select col#>>path_; $$;
 
-create or replace function json_query._column_extract_path(col jsonb, path_ jsonb)
+create function json_query._column_extract_path(col jsonb, path_ jsonb)
 returns jsonb language sql immutable as $$
   select case jsonb_typeof(path_)
     when 'array' then
@@ -223,7 +223,7 @@ returns jsonb language sql immutable as $$
     end;
 $$;
 
-create or replace function json_query._column_extract_path_text(col jsonb, path_ jsonb)
+create function json_query._column_extract_path_text(col jsonb, path_ jsonb)
 returns text language sql immutable as $$
   select case jsonb_typeof(path_)
     when 'array' then
@@ -233,12 +233,12 @@ returns text language sql immutable as $$
     end;
 $$;
 
-create or replace function json_query._column_extract_path(col json, path_ anyelement)
+create function json_query._column_extract_path(col json, path_ anyelement)
 returns json language sql immutable as $$
   select json_query._column_extract_path(col::jsonb, path_)::json;
 $$;
 
-create or replace function json_query._column_extract_path_text(col json, path_ anyelement)
+create function json_query._column_extract_path_text(col json, path_ anyelement)
 returns text language sql immutable as $$
   select json_query._column_extract_path(col::jsonb, path_)::text;
 $$;

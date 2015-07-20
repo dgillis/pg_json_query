@@ -1,6 +1,6 @@
 
 
-create or replace function json_query._validate_attr_name(attrname text)
+create function json_query._validate_attr_name(attrname text)
 returns text language plpgsql immutable as $$
 begin
   if not (attrname ~ '^[a-zA-Z0-9]+(_?[a-zA-Z0-9]+)*$') then
@@ -16,7 +16,7 @@ $$;
 -- that require "double quoting" are not allowed by _validate_column_name() and
 -- so any columns received from this function should be presumed safe to use as
 -- an identifier.
-create or replace function json_query._get_type_attrs(full_type_name text)
+create function json_query._get_type_attrs(full_type_name text)
 returns table(attrname text, datatype text)
 language sql stable as $$
   with
@@ -36,7 +36,7 @@ language sql stable as $$
 $$;
 
 
-create or replace function json_query._filter_attr_not_exists_handler(
+create function json_query._filter_attr_not_exists_handler(
   full_type_name text,
   attr_name text
 ) returns boolean
@@ -47,7 +47,7 @@ begin
 end;
 $$;
 
-create or replace function json_query._colval_attr_not_exists_handler(
+create function json_query._colval_attr_not_exists_handler(
   valtype anyelement,
   full_type_name text,
   attr_name text
@@ -60,7 +60,7 @@ end;
 $$;
 
 
-create or replace function json_query._attr_not_exists_handler(
+create function json_query._attr_not_exists_handler(
   ret_type anyelement,
   full_type_name text,
   attr_name text
@@ -71,7 +71,7 @@ $$;
 
 -- Create the function definition for the _filter_row_column_impl()
 -- function for the specified type.
-create or replace function json_query._get_filter_row_column_impl_defn(
+create function json_query._get_filter_row_column_impl_defn(
   full_type_name text
 ) returns text language plpgsql stable as $$
 declare
@@ -108,7 +108,7 @@ $$;
 -- Create the function definition for the _col_value_impl() function for the
 -- specified table and output_typ. Note that for the _type passed, there must
 -- exist a corresponding implementation of _col_value_cast_defn(expr, _type).
-create or replace function json_query._get_col_value_impl_defn(
+create function json_query._get_col_value_impl_defn(
   full_type_name text,
   to_type_name text
 ) returns text language plpgsql stable as $$
@@ -158,7 +158,7 @@ $$;
 
 
 
-create or replace function json_query.register_type(full_type_name text)
+create function json_query.register_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;
@@ -185,7 +185,7 @@ $$;
 
 
 
-create or replace function json_query.unregister_type(full_type_name text)
+create function json_query.unregister_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;

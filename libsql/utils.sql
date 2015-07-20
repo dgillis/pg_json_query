@@ -1,5 +1,5 @@
 
-create or replace function json_query._jsonb_arr_to_text_arr(arr jsonb)
+create function json_query._jsonb_arr_to_text_arr(arr jsonb)
 returns text[] language sql immutable
 as $$
   select case jsonb_array_length(arr)
@@ -18,7 +18,7 @@ $$;
 
 
 -- Concating elements like this is faster then the built in json_build_array.
-create or replace function json_query._build_array(variadic elems jsonb[] default array[]::jsonb[])
+create function json_query._build_array(variadic elems jsonb[] default array[]::jsonb[])
 returns jsonb
 language sql immutable
 as $$
@@ -27,7 +27,7 @@ $$;
 
 
 
-create or replace function json_query._json_string_to_text(s jsonb)
+create function json_query._json_string_to_text(s jsonb)
 returns text
 language sql immutable
 as $$
@@ -39,7 +39,7 @@ $$;
 -- Concat the two JSONB arrays to form a new one. If either element
 -- is a non-array, it will be treated as a single element array of
 -- that element.
-create or replace function json_query._jsonb_array_concat(e1 jsonb, e2 jsonb)
+create function json_query._jsonb_array_concat(e1 jsonb, e2 jsonb)
 returns jsonb
 language sql immutable strict
 as $$
@@ -81,7 +81,7 @@ $$;
 
 
 
-create or replace function json_query._to_text(val jsonb)
+create function json_query._to_text(val jsonb)
 returns text
 language sql immutable
 as $$
@@ -94,7 +94,7 @@ as $$
 $$;
 
 
-create or replace function json_query._force_text(val anyelement,
+create function json_query._force_text(val anyelement,
                                                  -- The following defaults are just to cache
                                                  -- the type identifiers and shouldn't be
                                                  -- regarded as params.
@@ -117,7 +117,7 @@ $$;
 -- Test whether the string appears to be a valid JSON array or string.
 -- This is intended to be fast rather than exact and will return true
 -- for some string where s:json would actually raise an exception.
-create or replace function json_query._looks_like_json_string_or_array(s text)
+create function json_query._looks_like_json_string_or_array(s text)
 returns boolean
 language sql immutable as $$
   select length(s) > 1 and case left(s, 1)
@@ -133,7 +133,7 @@ $$;
 
 
 
-create or replace function json_query._col_in_jsonb_arr(
+create function json_query._col_in_jsonb_arr(
   col anyelement,
   arr jsonb,
   _coltype anyelement default null
@@ -199,7 +199,7 @@ as $$
 $$;
 
 
-create or replace function json_query._col_in_jsonb(
+create function json_query._col_in_jsonb(
   col anyelement,
   arr_or_obj jsonb
 )
@@ -219,32 +219,32 @@ $$;
 
 
 -- Helper methods for like/startswith/ilike.
-create or replace function json_query._like_helper(col text, pattern text)
+create function json_query._like_helper(col text, pattern text)
 returns boolean language sql immutable as $$
   select col like pattern;
 $$;
 
-create or replace function json_query._like_helper(col jsonb, pattern text)
+create function json_query._like_helper(col jsonb, pattern text)
 returns boolean language sql immutable as $$
   select json_query._json_string_to_text(col) like pattern;
 $$;
 
-create or replace function json_query._like_helper(col json, pattern text)
+create function json_query._like_helper(col json, pattern text)
 returns boolean language sql immutable as $$
   select json_query._json_string_to_text(col::jsonb) like pattern;
 $$;
 
-create or replace function json_query._ilike_helper(col text, pattern text)
+create function json_query._ilike_helper(col text, pattern text)
 returns boolean language sql immutable as $$
   select col ilike pattern;
 $$;
 
-create or replace function json_query._ilike_helper(col jsonb, pattern text)
+create function json_query._ilike_helper(col jsonb, pattern text)
 returns boolean language sql immutable as $$
   select json_query._json_string_to_text(col) ilike pattern;
 $$;
 
-create or replace function json_query._ilike_helper(col json, pattern text)
+create function json_query._ilike_helper(col json, pattern text)
 returns boolean language sql immutable as $$
   select json_query._json_string_to_text(col::jsonb) ilike pattern;
 $$;
@@ -253,12 +253,12 @@ $$;
 
 -- Fallback implementations _like_helper/_ilike_helper for non string/json
 -- types.
-create or replace function json_query._like_helper(col anyelement, pattern text)
+create function json_query._like_helper(col anyelement, pattern text)
 returns boolean language sql immutable as $$
   select col::text like pattern;
 $$;
 
-create or replace function json_query._ilike_helper(col anyelement, pattern text)
+create function json_query._ilike_helper(col anyelement, pattern text)
 returns boolean language sql immutable as $$
   select col::text ilike pattern;
 $$;

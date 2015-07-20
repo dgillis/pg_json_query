@@ -53,7 +53,7 @@ json_query._field_type(path_arr, is_text)
 json_query._field_type(path_expr) - determines "is_text" based on whether
   "->>" or "->" delimiters are used.
 */
-create or replace function json_query._field_type(column_ text,
+create function json_query._field_type(column_ text,
                                                   path_arr text[],
                                                   path_is_text boolean,
                                                   path_arr_len int default null)
@@ -73,7 +73,7 @@ returns json_query._field_type language sql immutable as $$
 $$;
 
 
-create or replace function json_query._unsplit_field_expr_arr(arr text[], path_is_text boolean, arrlen int)
+create function json_query._unsplit_field_expr_arr(arr text[], path_is_text boolean, arrlen int)
 returns json_query._field_type language sql immutable as $$
   select json_query._field_type(
     arr[1],
@@ -83,13 +83,13 @@ returns json_query._field_type language sql immutable as $$
   );
 $$;
 
-create or replace function json_query._unsplit_field_expr_arr(arr text[], path_is_text boolean)
+create function json_query._unsplit_field_expr_arr(arr text[], path_is_text boolean)
 returns json_query._field_type language sql immutable as $$
   select json_query._unsplit_field_expr_arr(arr, path_is_text, array_length(arr, 1));
 $$;
 
 
-create or replace function json_query._field_type(field_expr text)
+create function json_query._field_type(field_expr text)
 returns json_query._field_type language sql immutable as $$
   select case
     when strpos(field_expr, '->') = 0 then
@@ -108,19 +108,19 @@ json_query._field_op_type(field, op)
 json_query._field_op_type(path_expr, op) - Constructs the field and determines
   "is_text" based on "->"/"->>".
 */
-create or replace function json_query._field_op_type(field json_query._field_type,
+create function json_query._field_op_type(field json_query._field_type,
                                                      op json_query._op_type)
 returns json_query._field_op_type language sql immutable as $$
   select row(field.column_, field.path_arr, field.path_is_text,
              field.path_arr_len, op)::json_query._field_op_type;
 $$;
 
-create or replace function json_query._field_op_type(field_expr text, op json_query._op_type)
+create function json_query._field_op_type(field_expr text, op json_query._op_type)
 returns json_query._field_op_type language sql immutable as $$
   select json_query._field_op_type(json_query._field_type(field_expr), op);
 $$;
 
-create or replace function json_query._field_op_type(field_op_expr text)
+create function json_query._field_op_type(field_op_expr text)
 returns json_query._field_op_type language plpgsql immutable as $$
 declare
   parts text[];
@@ -151,18 +151,18 @@ json_query._filt_type(path_expr, op, value)
 
 json_query._filt_type(field_op_expr, value)
 */
-create or replace function json_query._filt_type(field_op json_query._field_op_type, value jsonb)
+create function json_query._filt_type(field_op json_query._field_op_type, value jsonb)
 returns json_query._filt_type language sql immutable as $$
   select row(field_op.column_, field_op.path_arr, field_op.path_is_text,
              field_op.path_arr_len, field_op.op, value)::json_query._filt_type;
 $$;
 
-create or replace function json_query._filt_type(field text, op json_query._op_type, value jsonb)
+create function json_query._filt_type(field text, op json_query._op_type, value jsonb)
 returns json_query._filt_type language sql immutable as $$
   select json_query._filt_type(json_query._field_op_type(field, op), value);
 $$;
 
-create or replace function json_query._filt_type(field_op_expr text, value jsonb)
+create function json_query._filt_type(field_op_expr text, value jsonb)
 returns json_query._filt_type language sql immutable as $$
   select json_query._filt_type(json_query._field_op_type(field_op_expr), value);
 $$;
@@ -170,13 +170,13 @@ $$;
 
 
 -- Methods for field-like types.
-create or replace function json_query._get_column(fld anyelement)
+create function json_query._get_column(fld anyelement)
 returns text language sql immutable as $$ select (fld.field_arr)[1]; $$;
 
-create or replace function json_query._get_path_length(fld anyelement)
+create function json_query._get_path_length(fld anyelement)
 returns int language sql immutable as $$ select fld.field_arr_len - 1; $$;
 
-create or replace function json_query._get_field_column(fld anyelement)
+create function json_query._get_field_column(fld anyelement)
 returns text language sql immutable as $$
   select fld.field_arr[1];
 $$;
@@ -184,7 +184,7 @@ $$;
 -- Returns NULL if there is no path array, a JSONB string of the first element
 -- if the path array has length = 1 otherwise a JSONB array containing the path
 -- elements as JSONB strings.
-create or replace function json_query._get_path_json(fld anyelement)
+create function json_query._get_path_json(fld anyelement)
 returns jsonb language sql immutable as $$
   select case fld.path_arr_len
     when 0 then null::jsonb
@@ -196,7 +196,7 @@ $$;
 
 
 
-create or replace function json_query._filt_to_json(filt json_query._filt_type)
+create function json_query._filt_to_json(filt json_query._filt_type)
 returns jsonb language sql immutable as $$
    select json_build_object(
       'field', filt.column_,
@@ -209,47 +209,47 @@ $$;
 
 
 
-create or replace function json_query._field_extract_from_column(fld anyelement, col jsonb)
+create function json_query._field_extract_from_column(fld anyelement, col jsonb)
 returns jsonb language sql immutable as $$
   select json_query._column_extract_path(col, fld.path_arr);
 $$;
 
 
-create or replace function json_query._field_extract_from_column(fld anyelement, col json)
+create function json_query._field_extract_from_column(fld anyelement, col json)
 returns json language sql immutable as $$
   select json_query._column_extract_path(col, fld.path_arr);
 $$;
 
 
-create or replace function json_query._field_extract_text_from_column(fld anyelement, col jsonb)
+create function json_query._field_extract_text_from_column(fld anyelement, col jsonb)
 returns text language sql immutable as $$
   select json_query._column_extract_path_text(col, fld.path_arr);
 $$;
 
 
-create or replace function json_query._field_extract_text_from_column(fld anyelement, col json)
+create function json_query._field_extract_text_from_column(fld anyelement, col json)
 returns text language sql immutable as $$
   select json_query._column_extract_path_text(col, fld.path_arr);
 $$;
 
 
 
-create or replace function json_query._field_extract_from_column(fld_expr text, col jsonb)
+create function json_query._field_extract_from_column(fld_expr text, col jsonb)
 returns jsonb language sql immutable as $$
   select json_query._field_extract_from_column(json_query._field_type(fld_expr), col);
 $$;
 
-create or replace function json_query._field_extract_from_column(fld_expr text, col json)
+create function json_query._field_extract_from_column(fld_expr text, col json)
 returns json language sql immutable as $$
   select json_query._field_extract_from_column(json_query._field_type(fld_expr), col);
 $$;
 
-create or replace function json_query._field_extract_text_from_column(fld_expr text, col jsonb)
+create function json_query._field_extract_text_from_column(fld_expr text, col jsonb)
 returns text language sql immutable as $$
   select json_query._field_extract_text_from_column(json_query._field_type(fld_expr), col);
 $$;
 
-create or replace function json_query._field_extract_text_from_column(fld_expr text, col json)
+create function json_query._field_extract_text_from_column(fld_expr text, col json)
 returns text language sql immutable as $$
   select json_query._field_extract_text_from_column(json_query._field_type(fld_expr), col);
 $$;
