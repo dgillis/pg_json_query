@@ -1,13 +1,18 @@
 /*
 Public interface:
 
-For rowtypes which implement json_query._filter_row_expr_impl(rowtype, expr):
-
 * json_query.filter(rowtype, filter_obj) -> boolean
 
-
-For types which implement json_query._col_value_impl(text, rowtype, colname)
-and json_query._col_value_impl(jsonb, rowtype, colname):
+  where filter object is of one of the following forms:
+    (1) {"field__op": "value"}
+    (2) {"$field": F, "$op": O, "$value": V, "$path": P}
+    (3) {"$and": [f1, f2, ..., fN]} where fi are also filter objects.
+  In the (1) syntax, a path for nested JSON value can be specified '->'
+  within the field portion of the string. Thus {"column->x->y__gt": 1}
+  is equivalent to "column->'x'->'y' > 1". The (optional) "$path" parameter
+  in (2) can also be used to specify the path to a nested JSON object. The
+  "$path" value can either be a single string (depth of 1) or an array of
+  strings to specify more deeply nested paths.
 
 
 * json_query.column_value(row rowtype, field text) -> jsonb
@@ -70,14 +75,10 @@ create schema json_query;
 \ir types.sql;
 \ir columns.sql;
 \ir ops.sql;
+\ir casts.sql;
 \ir filter.sql;
 \ir column_expr.sql;
-
-
-
-
-
-
+\ir creator_funcs.sql;
 
 
 commit;

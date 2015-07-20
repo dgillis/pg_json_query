@@ -27,7 +27,7 @@ $$;
 
 
 
-create function json_query._json_string_to_text(s jsonb)
+create or replace function json_query._json_string_to_text(s jsonb)
 returns text
 language sql immutable
 as $$
@@ -247,4 +247,18 @@ $$;
 create or replace function json_query._ilike_helper(col json, pattern text)
 returns boolean language sql immutable as $$
   select json_query._json_string_to_text(col::jsonb) ilike pattern;
+$$;
+
+
+
+-- Fallback implementations _like_helper/_ilike_helper for non string/json
+-- types.
+create or replace function json_query._like_helper(col anyelement, pattern text)
+returns boolean language sql immutable as $$
+  select col::text like pattern;
+$$;
+
+create or replace function json_query._ilike_helper(col anyelement, pattern text)
+returns boolean language sql immutable as $$
+  select col::text ilike pattern;
 $$;

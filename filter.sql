@@ -1,16 +1,18 @@
-
-
-create or replace function json_query._apply_filter(col anyelement, filt jsonb,
-                                                    _coltyp anyelement default null)
-returns boolean
-language sql immutable
+  
+-- General form for _apply_filter(). Type-specific implementations omit the
+-- third argument from their call signature so that they can make a call to
+-- this method after doing any type-specific preprocessing (e.g., see the json
+-- implementation).
+create or replace function json_query._apply_filter(
+  col anyelement,
+  filt jsonb,
+  _coltyp anyelement default null
+) returns boolean language sql immutable
 as $$ select json_query._apply_op(filt->>'op', col, filt); $$;
 
 
-
--- Filter expressions applied to JSONB columns may also optionally specify
--- a "path" that should either be a JSONB array or a string representing the
--- path to a nested value to use as the basis for the filter.
+-- JSONB implementation of _apply_filter(). Calls the general form after
+-- evaluating any path included in the filter.
 create or replace function json_query._apply_filter(col jsonb, filt jsonb)
 returns boolean
 language sql immutable
@@ -34,48 +36,58 @@ as $$
 $$;
 
 
+-- JSON implementation of _apply_filter(). Similar to the JSONB one.
+create or replace function json_query._apply_filter(col json, filt jsonb)
+returns boolean
+language sql immutable as $$
+  select json_query._apply_filter(col::jsonb, filt);
+$$;
 
 
-/*
-The following functions are partial implementations for additional functionality
-defined on a per-table basis. 
-*/
-
-create or replace function json_query._filter_row_column_router(row_ anyelement, filt jsonb)
-returns boolean language sql immutable as $$
-  select case
-    when filt is null then
-      true
-    else 
-      json_query._filter_row_column_router_impl(filt->>'field', row_, filt)
+-- Call _filter_row_column_impl() if filt is non-null, otherwise return true.
+-- Note that this functions depends on the existence of an implementation of
+-- _filter_row_column_impl() for the given row type.
+create or replace function json_query._filter_row_column(
+  row_ anyelement,
+  filt jsonb
+) returns boolean language sql immutable as $$
+  select
+    case
+      when filt is null then
+        true
+      else 
+        json_query._filter_row_column_impl(filt->>'field', row_, filt)
     end;
 $$;
 
 
-
+-- Returns true if every filter object in the JSONB-array of filters is true
+-- or false otherwise. Any elements beyond the maximum allowed (currently, 12)
+-- will be ignored.
 create or replace function json_query._filter_row_impl(
   row_ anyelement,
   filts jsonb
-)
-returns boolean
+) returns boolean
 language sql immutable
 as $$
   select
-    json_query._filter_row_column_router(row_, filts->0) and
-    json_query._filter_row_column_router(row_, filts->1) and
-    json_query._filter_row_column_router(row_, filts->2) and
-    json_query._filter_row_column_router(row_, filts->3) and
-    json_query._filter_row_column_router(row_, filts->4) and
-    json_query._filter_row_column_router(row_, filts->5) and
-    json_query._filter_row_column_router(row_, filts->6) and
-    json_query._filter_row_column_router(row_, filts->7) and
-    json_query._filter_row_column_router(row_, filts->8) and
-    json_query._filter_row_column_router(row_, filts->9) and
-    json_query._filter_row_column_router(row_, filts->10) and
-    json_query._filter_row_column_router(row_, filts->11);
+    json_query._filter_row_column(row_, filts->0) and
+    json_query._filter_row_column(row_, filts->1) and
+    json_query._filter_row_column(row_, filts->2) and
+    json_query._filter_row_column(row_, filts->3) and
+    json_query._filter_row_column(row_, filts->4) and
+    json_query._filter_row_column(row_, filts->5) and
+    json_query._filter_row_column(row_, filts->6) and
+    json_query._filter_row_column(row_, filts->7) and
+    json_query._filter_row_column(row_, filts->8) and
+    json_query._filter_row_column(row_, filts->9) and
+    json_query._filter_row_column(row_, filts->10) and
+    json_query._filter_row_column(row_, filts->11);
 $$;
 
 
+-- Convert one of the filter objects from the user input format into a JSONB
+-- array of _filter_type-like JSONB objects.
 create or replace function json_query._parse_filter_obj_to_json(obj jsonb)
 returns jsonb language plpgsql immutable as $$
 declare
@@ -131,13 +143,15 @@ end;
 $$;
 
 
-
+-- Wrapper around parse_parse_filter_obj_to_json().
 create or replace function json_query._parse_filter(typ jsonb, obj jsonb)
 returns jsonb language sql immutable as $$
   select json_query._parse_filter_obj_to_json(obj);
 $$;
 
 
+-- Filter function available to all tables which implement
+-- _filter_row_column_impl() for their row-type.
 create or replace function json_query.filter(row_ anyelement, filter_obj jsonb)
 returns boolean
 language sql immutable
