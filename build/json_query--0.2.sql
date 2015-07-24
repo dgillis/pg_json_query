@@ -273,31 +273,47 @@ create type _pg_json_query._field_type as (
   path_arr_len int
 );
 
-create type _pg_json_query._op_type as enum(
-  'eq',
-  'ne',
-  'lt',
-  'gt',
-  'ge', 'gte', 
-  'le', 'lte',
-  'in',
-  'notin',
-  'startswith',
-  'istartswith',
-  'endswith',
-  'iendswith',
-  'like',
-  'ilike',
-  'exists',
-  'notexists'
-);
+
+create or replace function _pg_json_query._validate_op(
+  op text,
+  _ops jsonb default '{
+    "eq": true,
+    "ne": true,
+    "lt": true,
+    "gt": true,
+    "ge": true, "gte": true,
+    "le": true, "lte": true,
+    "in": true,
+    "notin": true,
+    "startswith": true,
+    "istartswith": true,
+    "endswith": true,
+    "iendswith": true,
+    "like": true,
+    "ilike": true,
+    "exists": true,
+    "notexists": true,
+    "contains": true,
+    "notcontains": true,
+    "contained": true,
+    "notcontained": true
+  }')
+returns text language plpgsql immutable as $$
+begin
+  if not (_ops ? op) then
+    raise exception 'Invalid json_query op: %', op;
+  end if;
+  return op;
+end;
+$$;
+
 
 create type _pg_json_query._field_op_type as (
   column_ text,
   path_arr text [],
   path_is_text boolean,
   path_arr_len int,
-  op _pg_json_query._op_type
+  op text
 );
 
 create type _pg_json_query._filt_type as (
@@ -305,7 +321,7 @@ create type _pg_json_query._filt_type as (
   path_arr text [],
   path_is_text boolean,
   path_arr_len int,
-  op _pg_json_query._op_type,
+  op text,
   value jsonb
 );
 
@@ -320,9 +336,9 @@ _pg_json_query._field_type(path_expr) - determines "is_text" based on whether
   "->>" or "->" delimiters are used.
 */
 create function _pg_json_query._field_type(column_ text,
-                                                  path_arr text[],
-                                                  path_is_text boolean,
-                                                  path_arr_len int default null)
+                                           path_arr text[],
+                                           path_is_text boolean,
+                                           path_arr_len int default null)
 returns _pg_json_query._field_type language sql immutable as $$
   select row(column_, path_arr, path_is_text,
     case
@@ -375,13 +391,18 @@ _pg_json_query._field_op_type(path_expr, op) - Constructs the field and determin
   "is_text" based on "->"/"->>".
 */
 create function _pg_json_query._field_op_type(field _pg_json_query._field_type,
-                                                     op _pg_json_query._op_type)
+                                              op text)
 returns _pg_json_query._field_op_type language sql immutable as $$
-  select row(field.column_, field.path_arr, field.path_is_text,
-             field.path_arr_len, op)::_pg_json_query._field_op_type;
+  select row(
+    field.column_,
+    field.path_arr,
+    field.path_is_text,
+    field.path_arr_len,
+    _pg_json_query._validate_op(op)
+  )::_pg_json_query._field_op_type;
 $$;
 
-create function _pg_json_query._field_op_type(field_expr text, op _pg_json_query._op_type)
+create function _pg_json_query._field_op_type(field_expr text, op text)
 returns _pg_json_query._field_op_type language sql immutable as $$
   select _pg_json_query._field_op_type(_pg_json_query._field_type(field_expr), op);
 $$;
@@ -398,7 +419,7 @@ begin
   if parts_len = 1 then
     return _pg_json_query._field_op_type(field_op_expr, 'eq');
   elsif parts_len = 2 then
-    return _pg_json_query._field_op_type(parts[1], parts[2]::_pg_json_query._op_type);
+    return _pg_json_query._field_op_type(parts[1], parts[2]);
   else
     return _pg_json_query._field_op_type(
       ws_concat('__', variadic parts[1:parts_len]),
@@ -423,18 +444,14 @@ returns _pg_json_query._filt_type language sql immutable as $$
              field_op.path_arr_len, field_op.op, value)::_pg_json_query._filt_type;
 $$;
 
-create function _pg_json_query._filt_type(field text, op _pg_json_query._op_type, value jsonb)
-returns _pg_json_query._filt_type language sql immutable as $$
-  select _pg_json_query._filt_type(_pg_json_query._field_op_type(field, op), value);
-$$;
-
 create function _pg_json_query._filt_type(field text, op text, value jsonb)
 returns _pg_json_query._filt_type language sql immutable as $$
   select _pg_json_query._filt_type(
-    _pg_json_query._field_op_type(field, op::_pg_json_query._op_type),
+    _pg_json_query._field_op_type(field, op),
     value
   );
 $$;
+
 
 create function _pg_json_query._filt_type(field_op_expr text, value jsonb)
 returns _pg_json_query._filt_type language sql immutable as $$
@@ -869,31 +886,31 @@ $$;
 -- the column's type is.
 create function _pg_json_query._contains(col anyelement, filt jsonb, _coltyp anyelement default null)
 returns boolean language sql immutable as $$
-  select col @> _pg_json_query._cast(filt->>'value', _coltyp)
+  select col @> _pg_json_query._cast(filt->>'value', _coltyp);
 $$;
 
 -- jsonb implementation.
 create function _pg_json_query._contains(col jsonb, filt jsonb, _coltyp jsonb default null)
-returns boolean language sql immutable as $$ select col @> filt->'value' $$;
+returns boolean language sql immutable as $$ select col @> (filt->'value'); $$;
 
 -- json implementation
 create function _pg_json_query._contains(col json, filt jsonb, _coltyp json default null)
-returns boolean language sql immutable as $$ select col::jsonb @> filt->'value' $$;
+returns boolean language sql immutable as $$ select col::jsonb @> (filt->'value'); $$;
 
 
 -- contained ("<@"). Functions analoguous to the contains functions.
 create function _pg_json_query._contained(col anyelement, filt jsonb, _coltyp anyelement default null)
 returns boolean language sql immutable as $$
-  select col <@ _pg_json_query._cast(filt->>'value', _coltyp)
+  select col <@ _pg_json_query._cast(filt->>'value', _coltyp);
 $$;
 
 -- jsonb implementation.
 create function _pg_json_query._contained(col jsonb, filt jsonb, _coltyp jsonb default null)
-returns boolean language sql immutable as $$ select col <@ filt->'value' $$;
+returns boolean language sql immutable as $$ select col <@ (filt->'value') $$;
 
 -- json implementation
 create function _pg_json_query._contained(col json, filt jsonb, _coltyp json default null)
-returns boolean language sql immutable as $$ select col::jsonb <@ filt->'value' $$;
+returns boolean language sql immutable as $$ select col::jsonb <@ (filt->'value') $$;
 
 
 -- not contains
@@ -906,7 +923,7 @@ $$;
 -- not contained
 create function _pg_json_query._notcontained(col anyelement, filt jsonb, _coltyp anyelement default null)
 returns boolean language sql immutable as $$
-  select not _pg_json_query._contains(col, filt, _coltyp);
+  select not _pg_json_query._contained(col, filt, _coltyp);
 $$;
 
 

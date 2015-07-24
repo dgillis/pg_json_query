@@ -130,31 +130,31 @@ $$;
 -- the column's type is.
 create function _pg_json_query._contains(col anyelement, filt jsonb, _coltyp anyelement default null)
 returns boolean language sql immutable as $$
-  select col @> _pg_json_query._cast(filt->>'value', _coltyp)
+  select col @> _pg_json_query._cast(filt->>'value', _coltyp);
 $$;
 
 -- jsonb implementation.
 create function _pg_json_query._contains(col jsonb, filt jsonb, _coltyp jsonb default null)
-returns boolean language sql immutable as $$ select col @> filt->'value' $$;
+returns boolean language sql immutable as $$ select col @> (filt->'value'); $$;
 
 -- json implementation
 create function _pg_json_query._contains(col json, filt jsonb, _coltyp json default null)
-returns boolean language sql immutable as $$ select col::jsonb @> filt->'value' $$;
+returns boolean language sql immutable as $$ select col::jsonb @> (filt->'value'); $$;
 
 
 -- contained ("<@"). Functions analoguous to the contains functions.
 create function _pg_json_query._contained(col anyelement, filt jsonb, _coltyp anyelement default null)
 returns boolean language sql immutable as $$
-  select col <@ _pg_json_query._cast(filt->>'value', _coltyp)
+  select col <@ _pg_json_query._cast(filt->>'value', _coltyp);
 $$;
 
 -- jsonb implementation.
 create function _pg_json_query._contained(col jsonb, filt jsonb, _coltyp jsonb default null)
-returns boolean language sql immutable as $$ select col <@ filt->'value' $$;
+returns boolean language sql immutable as $$ select col <@ (filt->'value') $$;
 
 -- json implementation
 create function _pg_json_query._contained(col json, filt jsonb, _coltyp json default null)
-returns boolean language sql immutable as $$ select col::jsonb <@ filt->'value' $$;
+returns boolean language sql immutable as $$ select col::jsonb <@ (filt->'value') $$;
 
 
 -- not contains
@@ -167,7 +167,7 @@ $$;
 -- not contained
 create function _pg_json_query._notcontained(col anyelement, filt jsonb, _coltyp anyelement default null)
 returns boolean language sql immutable as $$
-  select not _pg_json_query._contains(col, filt, _coltyp);
+  select not _pg_json_query._contained(col, filt, _coltyp);
 $$;
 
 
