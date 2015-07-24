@@ -1,6 +1,6 @@
 
 
-create function json_query._validate_attr_name(attrname text)
+create function _pg_json_query._validate_attr_name(attrname text)
 returns text language plpgsql immutable as $$
 begin
   if not (attrname ~ '^[a-zA-Z0-9]+(_?[a-zA-Z0-9]+)*$') then
@@ -16,7 +16,7 @@ $$;
 -- that require "double quoting" are not allowed by _validate_column_name() and
 -- so any columns received from this function should be presumed safe to use as
 -- an identifier.
-create function json_query._get_type_attrs(full_type_name text)
+create function _pg_json_query._get_type_attrs(full_type_name text)
 returns table(attrname text, datatype text)
 language sql stable as $$
   with
@@ -27,7 +27,7 @@ language sql stable as $$
       where oid = (select type_oid from type_oid)
     )
   select
-    json_query._validate_attr_name(attname::text) as attrname,
+    _pg_json_query._validate_attr_name(attname::text) as attrname,
     atttypid::regtype::text as datatype
   from pg_attribute
   where attrelid = (select type_relid from type_relid) and
@@ -36,7 +36,7 @@ language sql stable as $$
 $$;
 
 
-create function json_query._filter_attr_not_exists_handler(
+create function _pg_json_query._filter_attr_not_exists_handler(
   full_type_name text,
   attr_name text
 ) returns boolean
@@ -47,7 +47,7 @@ begin
 end;
 $$;
 
-create function json_query._colval_attr_not_exists_handler(
+create function _pg_json_query._colval_attr_not_exists_handler(
   valtype anyelement,
   full_type_name text,
   attr_name text
@@ -60,7 +60,7 @@ end;
 $$;
 
 
-create function json_query._attr_not_exists_handler(
+create function _pg_json_query._attr_not_exists_handler(
   ret_type anyelement,
   full_type_name text,
   attr_name text
@@ -71,7 +71,7 @@ $$;
 
 -- Create the function definition for the _filter_row_column_impl()
 -- function for the specified type.
-create function json_query._get_filter_row_column_impl_defn(
+create function _pg_json_query._get_filter_row_column_impl_defn(
   full_type_name text
 ) returns text language plpgsql stable as $$
 declare
@@ -80,19 +80,19 @@ declare
 begin
   when_exprs := concat_ws('', variadic (
     select array_agg(format(
-      E'    when %s then json_query._apply_filter(row_.%s, _)\n',
+      E'    when %s then _pg_json_query._apply_filter(row_.%s, _)\n',
       quote_literal(attrname), quote_ident(attrname)))
-    from json_query._get_type_attrs(full_type_name)
+    from _pg_json_query._get_type_attrs(full_type_name)
   ));
   
   col_not_exists_expr := format(
-    'json_query._filter_attr_not_exists_handler(%s, fld)',
+    '_pg_json_query._filter_attr_not_exists_handler(%s, fld)',
     quote_literal(full_type_name)
   );
   
   return concat(
      'create or replace function ',
-     'json_query._filter_row_column_impl(',
+     '_pg_json_query._filter_row_column_impl(',
          E'fld text, row_ ', full_type_name, E', _ anyelement)\n',
       E'returns boolean language sql immutable as $f$\n',
       E'  select case fld\n',
@@ -108,7 +108,7 @@ $$;
 -- Create the function definition for the _col_value_impl() function for the
 -- specified table and output_typ. Note that for the _type passed, there must
 -- exist a corresponding implementation of _col_value_cast_defn(expr, _type).
-create function json_query._get_col_value_impl_defn(
+create function _pg_json_query._get_col_value_impl_defn(
   full_type_name text,
   to_type_name text
 ) returns text language plpgsql stable as $$
@@ -122,7 +122,7 @@ begin
         quote_literal(t.attrname) as attrname_lit,
         'row_.' || quote_ident(t.attrname) as expr,
         t.datatype as from_type_name
-      from  json_query._get_type_attrs(full_type_name) t
+      from  _pg_json_query._get_type_attrs(full_type_name) t
     ),
     casted_exprs as (
       select
@@ -131,7 +131,7 @@ begin
           when from_type_name = to_type_name then
             expr
           else
-            format('json_query._cast(%s, null::%s)', expr, to_type_name)
+            format('_pg_json_query._cast(%s, null::%s)', expr, to_type_name)
         end as casted_expr
       from exprs
     )
@@ -141,13 +141,16 @@ begin
   from casted_exprs;
   
   attr_not_exists_expr := format(
-    'json_query._colval_attr_not_exists_handler(null::%s, %s, fld)',
+    '_pg_json_query._colval_attr_not_exists_handler(null::%s, %s, fld)',
     to_type_name, quote_literal(full_type_name)
   );
   
   return concat(
-     'create or replace function _col_val_impl(valtyp ',
-       to_type_name, ', row_ ', full_type_name, ', fld text)', E'\n',
+     'create or replace function _pg_json_query._jq_col_val_impl(',
+         'row_ ', full_type_name, ','
+         'fld text, ', 
+         'valtyp ', to_type_name,
+      ')', E'\n',
      'returns ', to_type_name, ' language sql stable as $f$', E'\n',
      '  select case fld ', E'\n', concat_ws(' ', variadic attr_exprs),
      ' else ', attr_not_exists_expr, E'\n', ' end;', E'\n',
@@ -158,7 +161,7 @@ $$;
 
 
 
-create function json_query.register_type(full_type_name text)
+create function jq_register_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;
@@ -166,17 +169,17 @@ begin
   full_type_name := full_type_name::regtype::text; -- ensure type exists.
 
   -- Create or replace the filter_row_column_impl() function for the type.
-  stmt := json_query._get_filter_row_column_impl_defn(full_type_name);
+  stmt := _pg_json_query._get_filter_row_column_impl_defn(full_type_name);
   execute stmt;
   
   -- Create or replace the filter_row_column_impl() functions for the type.
-  stmt := json_query._get_col_value_impl_defn(full_type_name, 'text');
+  stmt := _pg_json_query._get_col_value_impl_defn(full_type_name, 'text');
   execute stmt;
 
-  stmt := json_query._get_col_value_impl_defn(full_type_name, 'jsonb');
+  stmt := _pg_json_query._get_col_value_impl_defn(full_type_name, 'jsonb');
   execute stmt;
 
-  stmt := json_query._get_col_value_impl_defn(full_type_name, 'json');
+  stmt := _pg_json_query._get_col_value_impl_defn(full_type_name, 'json');
   execute stmt;
 
   return true;
@@ -185,7 +188,7 @@ $$;
 
 
 
-create function json_query.unregister_type(full_type_name text)
+create function jq_unregister_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;
@@ -194,19 +197,19 @@ begin
 
   -- Drop the filter_row_column_impl() function for the type.
   execute format(
-    'drop function if exists json_query._filter_row_column_impl(text, %s, anyelement)',
+    'drop function if exists _pg_json_query._filter_row_column_impl(text, %s, anyelement)',
     full_type_name);
 
   execute format(
-    'drop function if exists json_query._col_value_impl(text, %s, text)',
+    'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, text)',
     full_type_name);
-
+  
   execute format(
-    'drop function if exists json_query._col_value_impl(jsonb, %s, text)',
+    'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, jsonb)',
     full_type_name);
-
+  
   execute format(
-    'drop function if exists json_query._col_value_impl(json, %s, text)',
+    'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, json)',
     full_type_name);
   
   return true;
