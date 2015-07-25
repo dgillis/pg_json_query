@@ -3,7 +3,9 @@
 create function _pg_json_query._validate_attr_name(attrname text)
 returns text language plpgsql immutable as $$
 begin
-  if not (attrname ~ '^[a-zA-Z0-9]+(_?[a-zA-Z0-9]+)*$') then
+  -- valid attribute names cannot end in an underscore and cannot contain
+  -- consecutive underscores.
+  if not (attrname ~ '^(_?[a-zA-Z0-9]+)+$') then
     raise exception 'Invalid column name for json_query: %', attrname;
   end if;
   return attrname;
