@@ -15,6 +15,8 @@ data_includes =	${libsqldir}/init_schema.sql \
 		${libsqldir}/columns.sql \
 		${libsqldir}/casts.sql \
 		${libsqldir}/core_ops.sql \
+		${libsqldir}/like_predicate_helpers.sql \
+		${libsqldir}/in_predicate_helpers.sql \
 		${libsqldir}/predicates.sql \
 		${libsqldir}/filter.sql \
 		${libsqldir}/column_expr.sql \

@@ -6,7 +6,7 @@ returns boolean language sql stable as $$
   select case when filt->'value' = 'null' then
     col is null
   else
-    col = _pg_json_query._cast_column_value(_coltyp, filt->'value')
+    _pg_json_query._col_op__eq(col, filt->'value', _coltyp)
   end;
 $$;
 
@@ -18,7 +18,7 @@ returns boolean language sql stable as $$
   select case when filt->'value' = 'null' then
     col is not null
   else
-    col != _pg_json_query._cast_column_value(_coltyp, filt->'value')
+    _pg_json_query._col_op__ne(col, filt->'value', _coltyp)
   end;
 $$;
 
@@ -27,7 +27,7 @@ $$;
 create function _pg_json_query._apply_pred__gt(col anyelement, filt jsonb,
                                                _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select col > _pg_json_query._cast_column_value(_coltyp, filt->'value');
+  select _pg_json_query._col_op__gt(col, filt->'value', _coltyp);
 $$;
 
 
@@ -35,7 +35,7 @@ $$;
 create function _pg_json_query._apply_pred__lt(col anyelement, filt jsonb,
                                                _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select col < _pg_json_query._cast_column_value(_coltyp, filt->'value');
+  select _pg_json_query._col_op__lt(col, filt->'value', _coltyp);
 $$;
 
 
@@ -43,7 +43,7 @@ $$;
 create function _pg_json_query._apply_pred__ge(col anyelement, filt jsonb,
                                                _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select col >= _pg_json_query._cast_column_value(_coltyp, filt->'value');
+  select _pg_json_query._col_op__ge(col, filt->'value', _coltyp);
 $$;
 
 
@@ -51,7 +51,7 @@ $$;
 create function _pg_json_query._apply_pred__le(col anyelement, filt jsonb,
                                                _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select col <= _pg_json_query._cast_column_value(_coltyp, filt->'value');
+  select _pg_json_query._col_op__le(col, filt->'value', _coltyp);
 $$;
 
 
@@ -74,7 +74,7 @@ $$;
 create function _pg_json_query._apply_pred__notin(col anyelement, filt jsonb,
                                                   _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select not _pg_json_query._in(col, filt, _coltyp);
+  select not _pg_json_query._apply_pred__in(col, filt, _coltyp);
 $$;
  
 
@@ -128,7 +128,7 @@ $$;
 create function _pg_json_query._apply_pred__exists(col anyelement, filt jsonb,
                                                    _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select col ? (filt->>'value');
+  select _pg_json_query._col_op__exists(col, filt->'value', _coltyp);
 $$;
 
 
@@ -136,7 +136,7 @@ $$;
 create function _pg_json_query._apply_pred__notexists(col anyelement, filt jsonb,
                                                       _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select not _pg_json_query._exists(col, filt, _coltyp);
+  select not _pg_json_query._apply_pred__exists(col, filt, _coltyp);
 $$;
 
 
@@ -148,43 +148,43 @@ $$;
 create function _pg_json_query._apply_pred__contains(col anyelement, filt jsonb,
                                                      _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select col @> _pg_json_query._cast(filt->>'value', _coltyp);
+  select _pg_json_query._col_op__contains(col, filt->'value', _coltyp);
 $$;
 
--- jsonb implementation.
-create function _pg_json_query._apply_pred__contains(col jsonb, filt jsonb,
-                                                     _coltyp jsonb default null)
-returns boolean language sql stable as $$ select col @> (filt->'value'); $$;
+-- -- jsonb implementation.
+-- create function _pg_json_query._apply_pred__contains(col jsonb, filt jsonb,
+--                                                      _coltyp jsonb default null)
+-- returns boolean language sql stable as $$ select col @> (filt->'value'); $$;
 
--- json implementation
-create function _pg_json_query._apply_pred__contains(col json, filt jsonb,
-                                                     _coltyp json default null)
-returns boolean language sql stable as $$ select col::jsonb @> (filt->'value'); $$;
+-- -- json implementation
+-- create function _pg_json_query._apply_pred__contains(col json, filt jsonb,
+--                                                      _coltyp json default null)
+-- returns boolean language sql stable as $$ select col::jsonb @> (filt->'value'); $$;
 
 
 -- contained ("<@"). Functions analoguous to the contains functions.
 create function _pg_json_query._apply_pred__contained(col anyelement, filt jsonb,
                                                       _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select col <@ _pg_json_query._cast(filt->>'value', _coltyp);
+  select _pg_json_query._col_op__contained(col, filt->'value', _coltyp);
 $$;
 
--- jsonb implementation.
-create function _pg_json_query._apply_pred__contained(col jsonb, filt jsonb,
-                                                      _coltyp jsonb default null)
-returns boolean language sql stable as $$ select col <@ (filt->'value') $$;
+-- -- jsonb implementation.
+-- create function _pg_json_query._apply_pred__contained(col jsonb, filt jsonb,
+--                                                       _coltyp jsonb default null)
+-- returns boolean language sql stable as $$ select col <@ (filt->'value') $$;
 
--- json implementation
-create function _pg_json_query._apply_pred__contained(col json, filt jsonb,
-                                                      _coltyp json default null)
-returns boolean language sql stable as $$ select col::jsonb <@ (filt->'value') $$;
+-- -- json implementation
+-- create function _pg_json_query._apply_pred__contained(col json, filt jsonb,
+--                                                       _coltyp json default null)
+-- returns boolean language sql stable as $$ select col::jsonb <@ (filt->'value') $$;
 
 
 -- not contains
 create function _pg_json_query._apply_pred__notcontains(col anyelement, filt jsonb,
                                                         _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select not _pg_json_query._contains(col, filt, _coltyp);
+  select not _pg_json_query._apply_pred__contains(col, filt, _coltyp);
 $$;
 
 
@@ -192,7 +192,7 @@ $$;
 create function _pg_json_query._apply_pred__notcontained(col anyelement, filt jsonb,
                                                          _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select not _pg_json_query._contained(col, filt, _coltyp);
+  select not _pg_json_query._apply_pred__contained(col, filt, _coltyp);
 $$;
 
 

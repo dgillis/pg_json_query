@@ -5,7 +5,7 @@ create function _pg_json_query._col_in_jsonb_arr(
   _coltype anyelement default null
 )
 returns boolean
-language sql immutable
+language sql stable
 as $$
   -- NOTE: We only allow arrays of up to length 20 for the "in"
   -- operator. This could be enlarged but it must be a preset
@@ -14,53 +14,53 @@ as $$
     when 0 then
       false
     when 1 then
-      col = _pg_json_query._cast_column_value(_coltype, arr->0)
+      _pg_json_query._col_op__eq(col, arr->0, _coltyp)
     when 2 then
-      col = _pg_json_query._cast_column_value(_coltype, arr->0) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->1)
+      _pg_json_query._col_op__eq(col, arr->0, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->1, _coltyp)
     when 3 then
-      col = _pg_json_query._cast_column_value(_coltype, arr->0) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->1) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->2)
+      _pg_json_query._col_op__eq(col, arr->0, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->1, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->2, _coltyp)
     when 4 then
-      col = _pg_json_query._cast_column_value(_coltype, arr->0) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->1) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->2) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->3)
+      _pg_json_query._col_op__eq(col, arr->0, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->1, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->2, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->3, _coltyp)
     when 5 then
-      col = _pg_json_query._cast_column_value(_coltype, arr->0) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->1) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->2) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->3) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->4)
+      _pg_json_query._col_op__eq(col, arr->0, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->1, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->2, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->3, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->4, _coltyp)
     when 6 then
-      col = _pg_json_query._cast_column_value(_coltype, arr->0) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->1) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->2) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->3) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->4) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->5)
+      _pg_json_query._col_op__eq(col, arr->0, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->1, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->2, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->3, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->4, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->5, _coltyp)
     else
-      col = _pg_json_query._cast_column_value(_coltype, arr->0) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->1) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->2) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->3) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->4) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->5) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->6) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->7) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->8) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->9) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->10) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->11) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->12) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->13) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->14) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->15) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->16) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->17) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->18) or
-      col = _pg_json_query._cast_column_value(_coltype, arr->19)
+      _pg_json_query._col_op__eq(col, arr->0, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->1, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->2, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->3, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->4, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->5, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->6, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->7, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->8, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->9, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->10, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->11, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->12, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->13, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->14, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->15, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->16, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->17, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->18, _coltyp) or
+      _pg_json_query._col_op__eq(col, arr->19, _coltyp)
     end;
 $$;
 
@@ -71,7 +71,7 @@ create function _pg_json_query._col_in_jsonb(
   arr_or_obj jsonb
 )
 returns boolean
-language sql immutable
+language sql stable
 as $$
   select case jsonb_typeof(arr_or_obj)
     when 'object' then

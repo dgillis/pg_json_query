@@ -1,4 +1,5 @@
- 
+
+
 create or replace function _pg_json_query._base_ops()
 returns jsonb language sql stable as $$ select '{
   "=": "eq",
@@ -22,6 +23,7 @@ create or replace view _pg_json_query._base_op_info_view as (
       select
         o.oprname::text as op,
         o.oprleft as arg_type,
+        o.oprright as right_arg_type,
         p.provolatile::text as volatility
       from pg_operator o
         join pg_proc p on o.oprcode = p.oid
@@ -33,9 +35,9 @@ create or replace view _pg_json_query._base_op_info_view as (
         (select _pg_json_query._base_ops()) ? o.oprname::text
     ),
     grouped as (
-      select op, arg_type, string_agg(volatility, '') as volatilities
+      select op, arg_type, right_arg_type, string_agg(volatility, '') as volatilities
       from ops
-      group by op, arg_type
+      group by op, arg_type, right_arg_type
     ),
     results as (
       select
@@ -43,6 +45,8 @@ create or replace view _pg_json_query._base_op_info_view as (
         op,
         arg_type,
         arg_type::regtype::text as arg_type_name,
+        right_arg_type,
+        right_arg_type::regtype::text as right_arg_type_name,
         case
           when strpos(volatilities, 'v') > 0 then
             'volatile'
@@ -124,7 +128,7 @@ create or replace function _pg_json_query._base_op_func_src(
   r _pg_json_query._base_op_info_view
 ) returns text language sql stable as $$
   select _pg_json_query._base_op_func_src(
-    (r).op_name::text, (r).arg_type_name::text, 'anyelement',
+    (r).op_name::text, (r).arg_type_name::text, (r).right_arg_type_name::text,
     (r).volatility, (r).op::text
   );
 $$;
@@ -141,6 +145,13 @@ end;
 $$;
 
 
+-- This function inspects pg_operator and using the operators it finds,
+-- constructs inlinable functions corresponding to each. A possible source
+-- of bugs will be if operators for a type are added AFTER this function is
+-- called (since it will have not made functions for those operators). This
+-- can be fixed by calling this function again (it's safe to call multiple
+-- times since it uses CREATE OR REPLACE). So, a public version of this
+-- function should be added to the API for this purpose.
 create or replace function _pg_json_query._make_base_op_funcs()
 returns void language plpgsql as $$
 declare
