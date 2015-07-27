@@ -3,19 +3,19 @@
 -- third argument from their call signature so that they can make a call to
 -- this method after doing any type-specific preprocessing (e.g., see the json
 -- implementation).
-create function _pg_json_query._apply_filter(
+create or replace function _pg_json_query._apply_filter(
   col anyelement,
   filt jsonb,
   _coltyp anyelement default null
-) returns boolean language sql immutable
+) returns boolean language sql stable
 as $$ select _pg_json_query._apply_op(filt->>'op', col, filt); $$;
 
 
 -- JSONB implementation of _apply_filter(). Calls the general form after
 -- evaluating any path included in the filter.
-create function _pg_json_query._apply_filter(col jsonb, filt jsonb)
+create or replace function _pg_json_query._apply_filter(col jsonb, filt jsonb)
 returns boolean
-language sql immutable
+language sql stable
 as $$
   select case
     when filt->'path' = 'null' then
@@ -37,9 +37,9 @@ $$;
 
 
 -- JSON implementation of _apply_filter(). Similar to the JSONB one.
-create function _pg_json_query._apply_filter(col json, filt jsonb)
+create or replace function _pg_json_query._apply_filter(col json, filt jsonb)
 returns boolean
-language sql immutable as $$
+language sql stable as $$
   select _pg_json_query._apply_filter(col::jsonb, filt);
 $$;
 
@@ -47,10 +47,10 @@ $$;
 -- Call _filter_row_column_impl() if filt is non-null, otherwise return true.
 -- Note that this functions depends on the existence of an implementation of
 -- _filter_row_column_impl() for the given row type.
-create function _pg_json_query._filter_row_column(
+create or replace function _pg_json_query._filter_row_column(
   row_ anyelement,
   filt jsonb
-) returns boolean language sql immutable as $$
+) returns boolean language sql stable as $$
   select
     case
       when filt is null then
@@ -64,11 +64,11 @@ $$;
 -- Returns true if every filter object in the JSONB-array of filters is true
 -- or false otherwise. Any elements beyond the maximum allowed (currently, 12)
 -- will be ignored.
-create function _pg_json_query._filter_row_impl(
+create or replace function _pg_json_query._filter_row_impl(
   row_ anyelement,
   filts jsonb
 ) returns boolean
-language sql immutable
+language sql stable
 as $$
   select
     _pg_json_query._filter_row_column(row_, filts->0) and
@@ -88,7 +88,7 @@ $$;
 
 -- Convert one of the filter objects from the user input format into a JSONB
 -- array of _filter_type-like JSONB objects.
-create function _pg_json_query._parse_filter_obj_to_json(obj jsonb)
+create or replace function _pg_json_query._parse_filter_obj_to_json(obj jsonb)
 returns jsonb language plpgsql immutable as $$
 declare
   and_arr jsonb;
@@ -144,7 +144,7 @@ $$;
 
 
 -- Wrapper around parse_parse_filter_obj_to_json().
-create function _pg_json_query._parse_filter(typ jsonb, obj jsonb)
+create or replace function _pg_json_query._parse_filter(typ jsonb, obj jsonb)
 returns jsonb language sql immutable as $$
   select _pg_json_query._parse_filter_obj_to_json(obj);
 $$;
@@ -152,9 +152,9 @@ $$;
 
 -- Filter function available to all tables which implement
 -- _filter_row_column_impl() for their row-type.
-create function jq_filter(row_ anyelement, filter_obj jsonb)
+create or replace function jq_filter(row_ anyelement, filter_obj jsonb)
 returns boolean
-language sql immutable
+language sql stable
 as $$
   select _pg_json_query._filter_row_impl(
     row_,
@@ -163,7 +163,7 @@ as $$
 $$;
 
 
-create function jq_and_filters(f1 jsonb, f2 jsonb)
+create or replace function jq_and_filters(f1 jsonb, f2 jsonb)
 returns jsonb language sql immutable as $$
   select
     case

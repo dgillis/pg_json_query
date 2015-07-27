@@ -42,7 +42,7 @@ create function _pg_json_query._filter_attr_not_exists_handler(
   full_type_name text,
   attr_name text
 ) returns boolean
-language plpgsql immutable as $$
+language plpgsql stable as $$
 begin
   raise exception '% has no column "%"', full_type_name, attr_name;
   return false;
@@ -54,7 +54,7 @@ create function _pg_json_query._colval_attr_not_exists_handler(
   full_type_name text,
   attr_name text
 ) returns anyelement
-language plpgsql immutable as $$
+language plpgsql stable as $$
 begin
   raise exception '% has no column "%"', full_type_name, attr_name;
   return case when false then valtype else null end;
@@ -66,7 +66,7 @@ create function _pg_json_query._attr_not_exists_handler(
   ret_type anyelement,
   full_type_name text,
   attr_name text
-) returns anyelement language sql immutable as $$
+) returns anyelement language sql stable as $$
   select null;
 $$;
 
@@ -96,7 +96,7 @@ begin
      'create or replace function ',
      '_pg_json_query._filter_row_column_impl(',
          E'fld text, row_ ', full_type_name, E', _ anyelement)\n',
-      E'returns boolean language sql immutable as $f$\n',
+      E'returns boolean language sql stable as $f$\n',
       E'  select case fld\n',
       when_exprs,
       '    else ', col_not_exists_expr, E'\n',

@@ -1,4 +1,4 @@
 # json_query extension
-default_version = '0.2'
+default_version = '0.3'
 relocatable = 'false'
 superuser = 'false'
