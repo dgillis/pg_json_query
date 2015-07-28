@@ -163,7 +163,7 @@ $$;
 
 
 
-create function jq_register_type(full_type_name text)
+create function jq_register_row_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;
@@ -190,7 +190,7 @@ $$;
 
 
 
-create function jq_unregister_type(full_type_name text)
+create function jq_unregister_row_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;
