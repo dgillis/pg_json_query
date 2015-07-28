@@ -633,11 +633,6 @@ returns bigint language sql immutable as $$ select x::bigint; $$;
 create function _pg_json_query._cast(x text, to_type boolean)
 returns boolean language sql immutable as $$ select x::boolean; $$;
 
-create function _pg_json_query._cast(x text, to_type text)
-returns text language sql immutable as $$;
-  select x;
-$$;
-
 create function _pg_json_query._cast(x text, to_type json)
 returns json language sql stable as $$; select to_json(x); $$;
 
@@ -652,189 +647,114 @@ begin
 end;
 $$;
 
-
-create or replace function _pg_json_query._base_ops()
-returns jsonb language sql stable as $$ select '{
-  "=": "eq",
-  "<>": "ne",
-  "<": "lt",
-  ">": "gt",
-  ">=": "ge",
-  "<=": "le",
-  "@>": "contains",
-  "<@": "contained",
-  "?": "exists",
-  "?|": "exists_any",
-  "?&": "exists_all"
+-- Constant JSONB object describing the "core" (i.e., base operators from
+-- which all others are derived) operators. The keys are the operator names
+-- aligning with the API operators. The value associated with each key is an
+-- object describing the operator. It contains the following properties:
+--    * op: the postgresql operator.
+--    * is_symmetric: true if this operator acts on two values of the same type
+--          or false otherwise.
+--    * lhs_type (required only if is_symmetric is false): the type of the LHS
+--          argument for a non-symmetric operator.
+create or replace function _pg_json_query._core_ops()
+returns jsonb language sql immutable as $$ select '{
+  "eq": {
+    "op": "=",
+    "is_symmetric": true
+  },
+  "ne": {
+    "op": "<>",
+    "is_symmetric": true
+  },
+  "gt": {
+    "op": ">",
+    "is_symmetric": true
+  },
+  "lt": {
+    "op": "<",
+    "is_symmetric": true
+  },
+  "ge": {
+    "op": ">=",
+    "is_symmetric": true
+  },
+  "le": {
+    "op": "<=",
+    "is_symmetric": true
+  },
+  "contains": {
+    "op": "@>",
+    "is_symmetric": true
+  },
+  "contained": {
+    "op": "<@",
+    "is_symmetric": true
+  },
+  "exists": {
+    "op": "?",
+    "is_symmetric": false,
+    "lhs_type": "text"
+  },
+  "existsany": {
+    "op": "?|",
+    "is_symmetric": false,
+    "lhs_type": "text[]"
+  },
+  "existsall": {
+    "op": "?&",
+    "is_symmetric": false,
+    "lhs_type": "text[]"
+  }
 }'::jsonb;
 $$;
 
 
-create or replace view _pg_json_query._base_op_info_view as (
-  with
-    ops as (
-      select
-        o.oprname::text as op,
-        o.oprleft as arg_type,
-        o.oprright as right_arg_type,
-        p.provolatile::text as volatility
-      from pg_operator o
-        join pg_proc p on o.oprcode = p.oid
-        join pg_type t on o.oprleft = t.oid
-      where
-        o.oprkind = 'b' and
-        -- Exclude operators on psuedotypes and unknown types.
-        t.typcategory not in ('P', 'X') and
-        (select _pg_json_query._base_ops()) ? o.oprname::text
-    ),
-    grouped as (
-      select op, arg_type, right_arg_type, string_agg(volatility, '') as volatilities
-      from ops
-      group by op, arg_type, right_arg_type
-    ),
-    results as (
-      select
-        (_pg_json_query._base_ops())->>op as op_name,
-        op,
-        arg_type,
-        arg_type::regtype::text as arg_type_name,
-        right_arg_type,
-        right_arg_type::regtype::text as right_arg_type_name,
-        case
-          when strpos(volatilities, 'v') > 0 then
-            'volatile'
-          when strpos(volatilities, 's') > 0 then
-            'stable'
-          else
-            'immutable'
-        end::text as volatility
-      from grouped
-    )
-  select *
-  from results
-  where volatility != 'volatile'
+
+-- A view of the core types for which we should provide ops/casts for
+-- by default. This is comprised of all built-in non-array/non-psuedo/
+-- non-unknown types, which are defined and which are not internal. The
+-- rows consist of a textual representation of the type (suitable to
+-- substitute into dynamic SQL) and the types OID.
+create or replace view _pg_json_query._default_row_types as (
+  select    
+    t.oid::regtype::text as type_name,
+    t.oid as type_oid
+  from pg_type t join pg_namespace n on t.typnamespace = n.oid
+  where
+    n.nspname = 'pg_catalog' and -- built-ins
+    typcategory not in ('A', 'P', 'x') and -- neither arrays, psuedo nor unknown
+    typname::text !~* '^pg_.*' and -- non-internal
+    typisdefined -- is defined
 );
 
 
-create or replace function _pg_json_query._base_op_func_name(op_name text)
-returns text language sql stable as $$
-  select '_op__' || op_name;
+create or replace function _pg_json_query._core_op_info(type_oid oid)
+returns table(op_name text, op text, lhs_oid oid, rhs_oid oid, op_exists boolean)
+language sql stable as $$
+  select *, exists(
+    select 1
+    from pg_operator o
+    -- Does there exist a boolean-valued operator matching our op and types?
+    where o.oprname = _.op and
+          o.oprleft = _.lhs_oid and
+          o.oprright = _.rhs_oid and
+          o.oprresult = 'boolean'::regtype::oid
+  ) as op_exists
+  from (
+    select
+      op_name,
+      info->>'op' as op,
+      type_oid as lhs_oid,
+      case
+        when (info->>'is_symmetric')::boolean then
+          type_oid
+        else
+          -- If not symmetric, lhs_type must be included.
+          (info->>'lhs_type')::regtype::oid
+      end as rhs_oid
+    from jsonb_each_text(_pg_json_query._core_ops()) _(op_name, info)
+  ) _;
 $$;
-
-
-create or replace function _pg_json_query._base_col_op_func_name(op_name text)
-returns text language sql stable as $$
-  select '_col_op__' || op_name;
-$$;
-
-
-create or replace function _pg_json_query._base_op_func_src(
-  op_name text,
-  left_arg_type_name text,
-  right_arg_type_name text,
-  volatility text,
-  op text
-) returns text language sql stable as $$
-  select concat(
-    'create or replace function ',
-    '_pg_json_query.', _pg_json_query._base_op_func_name(op_name),
-    '(x ', left_arg_type_name, ', ', 'y ', right_arg_type_name, ') ', E'\n',
-    'returns boolean language sql ', volatility, ' as $function$ ', E'\n',
-    '  select x ', op, ' y;', E'\n',
-    '$function$;'
-  )::text;
-$$;
-
-
-create or replace function _pg_json_query._base_col_op_func_src(
-  op_name text
-) returns text language sql stable as $$
-  select concat(
-    'create or replace function ',
-    '_pg_json_query.', _pg_json_query._base_col_op_func_name(op_name),
-    '(x anyelement, y jsonb, _coltype anyelement)', E'\n',
-    'returns boolean language sql stable as $function$ ', E'\n',
-    '  select _pg_json_query.', _pg_json_query._base_op_func_name(op_name),
-    '(x, _pg_json_query._cast_column_value(_coltype, y));'
-    '$function$;'
-  )::text;
-$$;
-
-
-create or replace function _pg_json_query._base_op_dne_func_src(
-  op_name text,
-  op text
-) returns text language sql stable as $$
-  select concat(
-    'create or replace function ',
-    '_pg_json_query.', _pg_json_query._base_op_func_name(op_name),
-    '(x anyelement, y anyelement) ', E'\n',
-    'returns boolean language sql stable as $function$', E'\n',
-    '  select _pg_json_query._base_op_does_not_exist(',
-       quote_literal(op), ', ', quote_literal(op_name), ', x);', E'\n',
-    '$function$;'
-  )::text;
-$$;
-
-
-create or replace function _pg_json_query._base_op_func_src(
-  r _pg_json_query._base_op_info_view
-) returns text language sql stable as $$
-  select _pg_json_query._base_op_func_src(
-    (r).op_name::text, (r).arg_type_name::text, (r).right_arg_type_name::text,
-    (r).volatility, (r).op::text
-  );
-$$;
-
-
-create or replace function _pg_json_query._base_op_does_not_exist(
-  op text, op_name text, arg anyelement
-)
-returns boolean language plpgsql stable as $$
-begin
-  raise exception 'json_query operator ''%'' is not defined for % type', op_name, pg_typeof(arg);
-  return false;
-end;
-$$;
-
-
--- This function inspects pg_operator and using the operators it finds,
--- constructs inlinable functions corresponding to each. A possible source
--- of bugs will be if operators for a type are added AFTER this function is
--- called (since it will have not made functions for those operators). This
--- can be fixed by calling this function again (it's safe to call multiple
--- times since it uses CREATE OR REPLACE). So, a public version of this
--- function should be added to the API for this purpose.
-create or replace function _pg_json_query._make_base_op_funcs()
-returns void language plpgsql as $$
-declare
-  op text;
-  op_name text;
-  r _pg_json_query._base_op_info_view%rowtype;
-  create_fn_sql text;
-begin
-  for op, op_name in (select *
-                      from jsonb_each_text(_pg_json_query._base_ops())) loop
-    create_fn_sql := _pg_json_query._base_op_dne_func_src(op_name, op);
-    execute create_fn_sql;
-    
-    create_fn_sql := _pg_json_query._base_col_op_func_src(op_name);
-    execute create_fn_sql;
-  end loop;
-  
-  for r in (select * from _pg_json_query._base_op_info_view) loop
-    create_fn_sql := _pg_json_query._base_op_func_src(r);
-    execute create_fn_sql;
-  end loop;
-end;
-$$;
-
-
-
-select _pg_json_query._make_base_op_funcs();
-
-
-
 
 -- Helper methods for like/startswith/ilike.
 create function _pg_json_query._like_helper(col text, pattern text)
@@ -884,7 +804,7 @@ $$;
 create function _pg_json_query._col_in_jsonb_arr(
   col anyelement,
   arr jsonb,
-  _coltype anyelement default null
+  _coltyp anyelement default null
 )
 returns boolean
 language sql stable
@@ -1094,7 +1014,7 @@ $$;
 create function _pg_json_query._apply_pred__exists(col anyelement, filt jsonb,
                                                    _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select _pg_json_query._col_op__exists(col, filt->'value', _coltyp);
+  select _pg_json_query._op__exists(col, filt->>'value');
 $$;
 
 
@@ -1776,7 +1696,7 @@ $$;
 
 
 
-create function jq_register_type(full_type_name text)
+create function jq_register_row_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;
@@ -1803,7 +1723,7 @@ $$;
 
 
 
-create function jq_unregister_type(full_type_name text)
+create function jq_unregister_row_type(full_type_name text)
 returns boolean language plpgsql volatile as $$
 declare
   stmt text;
@@ -1828,5 +1748,257 @@ begin
     full_type_name);
   
   return true;
+end;
+$$;
+
+
+
+-- Fallback implementation used for non-existent operators (we need such
+-- an implementation so that the static-type checker doesn't complain).
+create or replace function _pg_json_query._op_does_not_exist(
+  op_name text,
+  op text,
+  lhs_type_name text,
+  rhs_type_name text
+) returns boolean language plpgsql stable as $$
+begin
+  raise notice 'yeee';
+  raise exception 'json_query operator ''%'' (%) is not defined for (%, %)',
+    op_name, op, lhs_type_name, rhs_type_name;
+  return false;
+end;
+$$;
+
+
+create or replace function _pg_json_query._op_func_name(op_name text)
+returns text language sql immutable as $$ select '_op__' || op_name; $$;
+
+create or replace function _pg_json_query._col_op_func_name(op_name text)
+returns text language sql immutable as $$ select '_col_op__' || op_name; $$;
+
+
+create or replace function _pg_json_query._op_func_get_create_src(
+  op_name text,
+  op text,
+  lhs_oid oid,
+  rhs_oid oid,
+  op_exists boolean
+) returns text language plpgsql stable as $$
+declare
+  func_name text;
+  lhs_type_name text;
+  rhs_type_name text;
+  func_expr_src text;
+  func_src text;
+begin
+  func_name := _pg_json_query._op_func_name(op_name);
+  lhs_type_name := lhs_oid::regtype::text;
+  rhs_type_name := rhs_oid::regtype::text;
+  
+  func_expr_src := case
+    when op_exists then
+      concat('x ', op, ' y')
+    else
+      format(
+        '_pg_json_query._op_does_not_exist(%L, %L, %L, %L)',
+        op_name, op, lhs_type_name, rhs_type_name)
+  end;
+
+  func_src := concat(
+    'create or replace function _pg_json_query.',
+    func_name, '(x ', lhs_type_name, ', y ', rhs_type_name, ')', E'\n',
+    'returns boolean language sql stable as $function$', E'\n',
+    '  select ', func_expr_src, ';', E'\n',
+    '$function$;'
+  );
+  
+  return func_src;
+end;
+$$;
+
+
+create or replace function _pg_json_query._op_func_get_drop_src(
+  op_name text,
+  lhs_oid oid,
+  rhs_oid oid,
+  cascade_ boolean default false
+) returns text language sql stable as $$
+  select concat(
+    'drop function if exists _pg_json_query.',
+    _pg_json_query._op_func_name(op_name), '(',
+    lhs_oid::regtype::text, ', ', rhs_oid::regtype::text, ')',
+    (case when cascade_ then ' cascade;' else ';' end)
+  );
+$$;
+
+
+create or replace function _pg_json_query._col_op_func_get_create_src(
+  op_name text
+) returns text language sql stable as $$
+  select concat(
+    'create or replace function ',
+    '_pg_json_query.', _pg_json_query._col_op_func_name(op_name),
+    '(x anyelement, y jsonb, _coltype anyelement)', E'\n',
+    'returns boolean language sql stable as $function$ ', E'\n',
+    '  select _pg_json_query.', _pg_json_query._op_func_name(op_name),
+    '(x, _pg_json_query._cast_column_value(_coltype, y));'
+    '$function$;'
+  )::text;
+$$;
+
+
+create or replace function _pg_json_query._col_op_func_get_drop_src(
+  op_name text,
+  cascade_ boolean default false
+) returns text language sql stable as $$
+  select concat(
+    'drop function if exists _pg_json_query.',
+    _pg_json_query._col_op_func_name(op_name),
+    '(anyelement, json, anyelement)',
+    (case when cascade_ then ' cascade;' else ';' end)
+  );
+$$;
+
+
+create or replace function _pg_json_query._op_func_create(
+  op_name text,
+  op text,
+  lhs_oid oid,
+  rhs_oid oid,
+  op_exists boolean
+) returns void language plpgsql volatile as $$
+declare
+  src text;
+begin
+  src := _pg_json_query._op_func_get_create_src(
+    op_name, op, lhs_oid, rhs_oid, op_exists);
+  execute src;
+end;
+$$;
+
+
+create or replace function _pg_json_query._op_func_drop(
+  op_name text,
+  lhs_oid oid,
+  rhs_oid oid,
+  cascade_ boolean default false  
+) returns void language plpgsql volatile as $$
+declare
+  func_name text;
+  src text;
+begin
+  src := _pg_json_query._op_func_get_drop_src(
+    op_name, lhs_oid, rhs_oid, cascade_);
+  execute src;
+end;
+$$;
+
+
+create or replace function _pg_json_query._col_op_func_create(op_name text)
+returns void language plpgsql volatile as $$
+declare
+  src text;
+begin
+  src := _pg_json_query._col_op_func_get_create_src(op_name);
+  execute src;
+end;
+$$;
+
+
+create or replace function _pg_json_query._col_op_func_drop(
+  op_name text,
+  _cascade boolean default false
+)
+returns void language plpgsql volatile as $$
+declare
+  src text;
+begin
+  src := _pg_json_query._col_op_func_get_drop_src(op_name, _cascade);
+  execute src;
+end;
+$$;
+
+
+create or replace function _pg_json_query._register_col_type(type_oid oid)
+returns void language plpgsql volatile as $$
+declare
+  op_name text;
+  op text;
+  lhs_oid oid;
+  rhs_oid oid;
+  op_exists boolean;
+begin
+  for op_name, op, lhs_oid, rhs_oid, op_exists in (
+      select * from _pg_json_query._core_op_info(type_oid)) loop
+    perform _pg_json_query._op_func_create(
+      op_name, op, lhs_oid, rhs_oid, op_exists);
+  end loop;
+end;
+$$;
+
+
+create or replace function _pg_json_query._unregister_col_type(
+  type_oid oid,
+  cascade_ boolean default false
+) returns void language plpgsql volatile as $$
+declare
+  op_name text;
+  op text;
+  lhs_oid oid;
+  rhs_oid oid;
+  op_exists boolean;
+begin
+  for op_name, op, lhs_oid, rhs_oid, op_exists in (
+      select * from _pg_json_query._core_op_info(type_oid)) loop
+    perform _pg_json_query._op_func_drop(
+      op_name, op, lhs_oid, rhs_oid, op_exists, cascade_);
+  end loop;
+end;
+$$;
+
+
+-- Create the _col_op__<op> functions for all of core operators.
+do $$
+declare
+  op_name text;
+begin
+  for op_name in (select *
+                  from jsonb_object_keys(_pg_json_query._core_ops())) loop
+    perform _pg_json_query._col_op_func_create(op_name);
+  end loop;
+end;
+$$;
+
+
+create or replace function jq_register_column_type(type_name text)
+returns boolean language plpgsql volatile as $$
+begin
+  perform _pg_json_query._register_col_type(type_name::regtype::oid);
+  return true;
+end;
+$$;
+
+
+create or replace function jq_unregister_column_type(
+  type_name text,
+  cascade_ boolean default false
+) returns boolean language plpgsql volatile as $$
+begin
+  perform _pg_json_query._unregister_col_type(
+    type_name::regtype::oid, cascade_);
+  return true;
+end;
+$$;
+
+
+do $$
+declare
+  type_name text;
+  type_oid oid;
+begin
+  for type_name, type_oid in (select *
+                              from _pg_json_query._default_row_types) loop
+    perform _pg_json_query._register_col_type(type_oid);
+  end loop;
 end;
 $$;

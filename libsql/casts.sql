@@ -61,11 +61,6 @@ returns bigint language sql immutable as $$ select x::bigint; $$;
 create function _pg_json_query._cast(x text, to_type boolean)
 returns boolean language sql immutable as $$ select x::boolean; $$;
 
-create function _pg_json_query._cast(x text, to_type text)
-returns text language sql immutable as $$;
-  select x;
-$$;
-
 create function _pg_json_query._cast(x text, to_type json)
 returns json language sql stable as $$; select to_json(x); $$;
 

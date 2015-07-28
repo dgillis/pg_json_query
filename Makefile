@@ -14,13 +14,15 @@ data_includes =	${libsqldir}/init_schema.sql \
 		${libsqldir}/types.sql \
 		${libsqldir}/columns.sql \
 		${libsqldir}/casts.sql \
-		${libsqldir}/core_ops.sql \
+		${libsqldir}/db_info.sql \
 		${libsqldir}/like_predicate_helpers.sql \
 		${libsqldir}/in_predicate_helpers.sql \
 		${libsqldir}/predicates.sql \
 		${libsqldir}/filter.sql \
 		${libsqldir}/column_expr.sql \
-		${libsqldir}/creator_funcs.sql
+		${libsqldir}/register_row_type.sql \
+		${libsqldir}/register_column_type.sql \
+		${libsqldir}/register_defaults.sql
 
 bundle: ${data_includes}
 	cat $^ > ${CURR_BUNDLE}

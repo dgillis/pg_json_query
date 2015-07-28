@@ -2,7 +2,7 @@
 create function _pg_json_query._col_in_jsonb_arr(
   col anyelement,
   arr jsonb,
-  _coltype anyelement default null
+  _coltyp anyelement default null
 )
 returns boolean
 language sql stable

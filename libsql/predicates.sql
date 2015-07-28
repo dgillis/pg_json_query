@@ -128,7 +128,7 @@ $$;
 create function _pg_json_query._apply_pred__exists(col anyelement, filt jsonb,
                                                    _coltyp anyelement default null)
 returns boolean language sql stable as $$
-  select _pg_json_query._col_op__exists(col, filt->'value', _coltyp);
+  select _pg_json_query._op__exists(col, filt->>'value');
 $$;
 
 
