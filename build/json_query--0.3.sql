@@ -1271,10 +1271,15 @@ create or replace function jq_filter(row_ anyelement, filter_obj jsonb)
 returns boolean
 language sql stable
 as $$
-  select _pg_json_query._filter_row_impl(
-    row_,
-    _pg_json_query._parse_filter_obj_to_json(filter_obj)
-  );
+  select case
+    when filter_obj = '{}' then
+      true
+    else
+      _pg_json_query._filter_row_impl(
+        row_,
+        _pg_json_query._parse_filter_obj_to_json(filter_obj)
+    )
+  end;
 $$;
 
 
@@ -1762,7 +1767,6 @@ create or replace function _pg_json_query._op_does_not_exist(
   rhs_type_name text
 ) returns boolean language plpgsql stable as $$
 begin
-  raise notice 'yeee';
   raise exception 'json_query operator ''%'' (%) is not defined for (%, %)',
     op_name, op, lhs_type_name, rhs_type_name;
   return false;
@@ -1970,6 +1974,8 @@ end;
 $$;
 
 
+-- NOTE: This function should be invoked for any custom types to be used
+-- with json_query.
 create or replace function jq_register_column_type(type_name text)
 returns boolean language plpgsql volatile as $$
 begin

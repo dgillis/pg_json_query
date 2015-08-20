@@ -74,7 +74,7 @@ create or replace view _pg_json_query._default_row_types as (
   from pg_type t join pg_namespace n on t.typnamespace = n.oid
   where
     n.nspname = 'pg_catalog' and -- built-ins
-    typcategory not in ('A', 'P', 'x') and -- neither arrays, psuedo nor unknown
+    typcategory not in ('P', 'x') and -- neither psuedo nor unknown
     typname::text !~* '^pg_.*' and -- non-internal
     typisdefined -- is defined
 );

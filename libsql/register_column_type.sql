@@ -10,7 +10,6 @@ create or replace function _pg_json_query._op_does_not_exist(
   rhs_type_name text
 ) returns boolean language plpgsql stable as $$
 begin
-  raise notice 'yeee';
   raise exception 'json_query operator ''%'' (%) is not defined for (%, %)',
     op_name, op, lhs_type_name, rhs_type_name;
   return false;

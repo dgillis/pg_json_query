@@ -4,7 +4,7 @@ DATA = build/json_query--*.sql
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 
-CURR_VERSION = 0.3
+CURR_VERSION = 0.4
 CURR_BUNDLE = build/json_query--${CURR_VERSION}.sql
 
 libsqldir = libsql

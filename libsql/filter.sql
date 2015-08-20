@@ -50,7 +50,12 @@ $$;
 create or replace function _pg_json_query._filter_row_column(
   row_ anyelement,
   filt jsonb
-) returns boolean language sql stable as $$
+)
+returns boolean
+language sql
+stable
+cost 1000000
+as $$
   select
     case
       when filt is null then
@@ -67,8 +72,11 @@ $$;
 create or replace function _pg_json_query._filter_row_impl(
   row_ anyelement,
   filts jsonb
-) returns boolean
-language sql stable
+)
+returns boolean
+language sql
+stable
+cost 10000000 -- 10 * the cost of _filter_row_column
 as $$
   select
     _pg_json_query._filter_row_column(row_, filts->0) and
@@ -155,11 +163,17 @@ $$;
 create or replace function jq_filter(row_ anyelement, filter_obj jsonb)
 returns boolean
 language sql stable
+cost 10000000 -- same as cost of _filter_row_impl
 as $$
-  select _pg_json_query._filter_row_impl(
-    row_,
-    _pg_json_query._parse_filter_obj_to_json(filter_obj)
-  );
+  select case
+    when filter_obj = '{}' then
+      true
+    else
+      _pg_json_query._filter_row_impl(
+        row_,
+        _pg_json_query._parse_filter_obj_to_json(filter_obj)
+    )
+  end;
 $$;
 
 

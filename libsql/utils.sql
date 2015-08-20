@@ -30,9 +30,7 @@ $$;
 create function _pg_json_query._json_string_to_text(s jsonb)
 returns text
 language sql immutable
-as $$
-  select ('[' || s || ']')::jsonb->>0;
-$$;
+as $$ select s#>>'{}'; $$;
 
 
 
