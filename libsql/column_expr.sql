@@ -10,7 +10,7 @@ value for the specified field.
 
 
 -- _jq_extract_helper(row<anyelement>, fld<fldexpr|fldtype>, typ<*>)
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fld _pg_json_query._field_type,
   typ jsonb
@@ -31,7 +31,7 @@ as $$
     end;
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fld _pg_json_query._field_type,
   typ json
@@ -52,17 +52,18 @@ as $$
     end;
 $$;
 
-create function _pg_json_query._jq_val_helper(
-  row_ anyelement, 
+create or replace function _pg_json_query._jq_val_helper(
+  row_ anyelement,
   fld _pg_json_query._field_type,
   typ text
 )
 returns text
 language sql
 stable
-cost 1000000 as $$
+cost 1000000
+as $$
   select case fld.path_arr_len
-    when 0 then 
+    when 0 then
       _pg_json_query._jq_col_val_impl(row_, fld.column_, typ)
     else
       _pg_json_query._field_extract_text_from_column(
@@ -72,7 +73,7 @@ cost 1000000 as $$
     end;
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fldexpr text,
   typ jsonb
@@ -87,7 +88,7 @@ as $$
   );
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fldexpr text,
   typ json
@@ -102,7 +103,7 @@ as $$
   );
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fldexpr text,
   typ text
@@ -122,8 +123,8 @@ $$;
 -- text version.
 -- To use with a row type, implement json_col_base_value_impl(text, <rowtype>, text)
 -- that returns a textual representation of the specified column.
---create function _pg_json_query._col_value(valtyp text, row_ anyelement, fld text)
-create function jq_val(row_ anyelement, colname text, typ text)
+--create or replace function _pg_json_query._col_value(valtyp text, row_ anyelement, fld text)
+create or replace function jq_val(row_ anyelement, colname text, typ text)
 returns text
 language sql
 stable
@@ -133,13 +134,13 @@ as $$
 $$;
 
 
-create function jq_val(row_ anyelement, colname text, typ jsonb)
+create or replace function jq_val(row_ anyelement, colname text, typ jsonb)
 returns jsonb language sql stable as $$
   select _pg_json_query._jq_val_helper(row_, colname, typ);
 $$;
 
 
-create function jq_val(row_ anyelement, colname text, typ json)
+create or replace function jq_val(row_ anyelement, colname text, typ json)
 returns json
 language sql
 stable
@@ -150,7 +151,7 @@ $$;
 
 
 -- Helper for jq_val(row_, jsonb_array) when the arrays are long.
-create function _pg_json_query._jq_val_jsonb_arr(row_ anyelement, arr jsonb)
+create or replace function _pg_json_query._jq_val_jsonb_arr(row_ anyelement, arr jsonb)
 returns jsonb
 language sql
 stable
@@ -162,7 +163,7 @@ as $$
 $$;
 
 
-create function jq_val(row_ anyelement, colexpr jsonb, typ jsonb)
+create or replace function jq_val(row_ anyelement, colexpr jsonb, typ jsonb)
 returns jsonb
 language plpgsql
 stable
@@ -185,9 +186,9 @@ begin
       typ
     );
   end if;
-  
+
   arrlen := jsonb_array_length(colexpr);
-  
+
   if arrlen = 1 then
      return _pg_json_query._build_array(
        coalesce(
@@ -236,7 +237,7 @@ $$;
 
 
 -- If type is omitted, default to JSONB.
-create function jq_val(row_ anyelement, colname text)
+create or replace function jq_val(row_ anyelement, colname text)
 returns jsonb
 language sql
 stable
@@ -246,7 +247,7 @@ as $$
 $$;
 
 -- If type is omitted, default to JSONB.
-create function jq_val(row_ anyelement, colexpr jsonb)
+create or replace function jq_val(row_ anyelement, colexpr jsonb)
 returns jsonb
 language sql
 stable
@@ -255,7 +256,7 @@ as $$
   select jq_val(row_, colexpr, null::jsonb);
 $$;
 
-create function jq_val_text(row_ anyelement, colname text)
+create or replace function jq_val_text(row_ anyelement, colname text)
 returns text
 language sql
 stable
@@ -266,7 +267,7 @@ $$;
 
 
 
-create function jq_val_text_array(row_ anyelement, arr text[])
+create or replace function jq_val_text_array(row_ anyelement, arr text[])
 returns text[]
 language sql
 stable
@@ -277,7 +278,7 @@ as $$
 $$;
 
 
-create function jq_val(row_ anyelement, arr text[], typ jsonb)
+create or replace function jq_val(row_ anyelement, arr text[], typ jsonb)
 returns jsonb
 language sql
 stable
@@ -287,7 +288,7 @@ as $$
 $$;
 
 
-create function jq_val(row_ anyelement, arr text[], typ text)
+create or replace function jq_val(row_ anyelement, arr text[], typ text)
 returns text[]
 language sql
 stable
@@ -297,7 +298,7 @@ as $$
 $$;
 
 
-create function jq_concat_val_args(e1 jsonb, e2 jsonb)
+create or replace function jq_concat_val_args(e1 jsonb, e2 jsonb)
 returns jsonb
 language sql immutable
 as $$

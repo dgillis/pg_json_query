@@ -1,4 +1,4 @@
-  
+
 -- General form for _apply_filter(). Type-specific implementations omit the
 -- third argument from their call signature so that they can make a call to
 -- this method after doing any type-specific preprocessing (e.g., see the json
@@ -18,7 +18,7 @@ returns boolean
 language sql stable
 as $$
   select case
-    when filt->'path' = 'null' then
+    when (filt->>'path') is null then
       _pg_json_query._apply_filter(col, filt, null::jsonb)
     when filt->'path_is_text' = 'true' then
       _pg_json_query._apply_filter(
@@ -60,7 +60,7 @@ as $$
     case
       when filt is null then
         true
-      else 
+      else
         _pg_json_query._filter_row_column_impl(filt->>'field', row_, filt)
     end;
 $$;
@@ -76,7 +76,7 @@ create or replace function _pg_json_query._filter_row_impl(
 returns boolean
 language sql
 stable
-cost 10000000 -- 10 * the cost of _filter_row_column
+cost 1000000
 as $$
   select
     _pg_json_query._filter_row_column(row_, filts->0) and
@@ -94,10 +94,36 @@ as $$
 $$;
 
 
+-- The jq_filter() is having some performance issues stemming from the
+-- string processing of the filter object preventing inlining.  This
+-- function takes a JSONB array of filter objects already in the internal
+-- form, with "field", "op", "value" being required and "path", "path_is_text"
+-- being optional.
+create or replace function jq_filter_raw(
+  row_ anyelement,
+  filts jsonb
+)
+returns boolean
+language sql
+stable
+cost 1000000
+as $$
+   select _pg_json_query._filter_row_impl(row_, filts);
+$$;
+
+
 -- Convert one of the filter objects from the user input format into a JSONB
 -- array of _filter_type-like JSONB objects.
+--
+-- NOTE: It appears that in many cases this function prevents inlining.
+--   It looks like the implementation makes no difference when PLPGSQL is used
+--   since even changing the function to a constant "return XXXX" prevents
+--   inlining. Try and see if an SQL implementation can get over this.
 create or replace function _pg_json_query._parse_filter_obj_to_json(obj jsonb)
-returns jsonb language plpgsql immutable as $$
+returns jsonb
+language plpgsql
+stable
+as $$
 declare
   and_arr jsonb;
   dj_arr jsonb;
@@ -115,13 +141,13 @@ begin
 
     arr := and_arr;
   end if;
-  
+
   select json_agg(
     _pg_json_query._filt_to_json(_pg_json_query._filt_type(key, value))
   ) into dj_arr
   from jsonb_each(obj)
   where left(key, 1) != '$';
-  
+
   if dj_arr is not null then
      arr := case
        when arr is null then
@@ -130,14 +156,14 @@ begin
          _pg_json_query._jsonb_array_concat(arr, dj_arr)
        end;
   end if;
-  
+
   if obj ? '$field' or obj ? '$op' or obj ? '$value' then
     expl_filt := _pg_json_query._filt_to_json(_pg_json_query._filt_type(
       obj->>'$field',
       obj->>'$op',
       obj->'$value'
     ));
-    
+
     arr := case
       when arr is null then
         _pg_json_query._build_array(expl_filt)
@@ -145,7 +171,7 @@ begin
         _pg_json_query._jsonb_array_concat(arr, expl_filt)
       end;
   end if;
-  
+
   return coalesce(arr, '[]');
 end;
 $$;
@@ -153,7 +179,11 @@ $$;
 
 -- Wrapper around parse_parse_filter_obj_to_json().
 create or replace function _pg_json_query._parse_filter(typ jsonb, obj jsonb)
-returns jsonb language sql immutable as $$
+returns jsonb
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._parse_filter_obj_to_json(obj);
 $$;
 
@@ -162,18 +192,14 @@ $$;
 -- _filter_row_column_impl() for their row-type.
 create or replace function jq_filter(row_ anyelement, filter_obj jsonb)
 returns boolean
-language sql stable
-cost 10000000 -- same as cost of _filter_row_impl
+language sql
+stable
+cost 1000000 -- same as cost of _filter_row_impl
 as $$
-  select case
-    when filter_obj = '{}' then
-      true
-    else
-      _pg_json_query._filter_row_impl(
-        row_,
-        _pg_json_query._parse_filter_obj_to_json(filter_obj)
-    )
-  end;
+  select _pg_json_query._filter_row_impl(
+    row_,
+    _pg_json_query._parse_filter_obj_to_json(filter_obj)
+  );
 $$;
 
 

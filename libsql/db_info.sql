@@ -68,7 +68,7 @@ $$;
 -- rows consist of a textual representation of the type (suitable to
 -- substitute into dynamic SQL) and the types OID.
 create or replace view _pg_json_query._default_row_types as (
-  select    
+  select
     t.oid::regtype::text as type_name,
     t.oid as type_oid
   from pg_type t join pg_namespace n on t.typnamespace = n.oid
@@ -104,7 +104,7 @@ language sql stable as $$
           -- If not symmetric, lhs_type must be included.
           (info->>'lhs_type')::regtype::oid
       end as rhs_oid
-    from jsonb_each_text(_pg_json_query._core_ops()) _(op_name, info)
+    from jsonb_each(_pg_json_query._core_ops()) _(op_name, info)
   ) _;
 $$;
 

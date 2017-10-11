@@ -41,7 +41,7 @@ begin
   func_name := _pg_json_query._op_func_name(op_name);
   lhs_type_name := lhs_oid::regtype::text;
   rhs_type_name := rhs_oid::regtype::text;
-  
+
   func_expr_src := case
     when op_exists then
       concat('x ', op, ' y')
@@ -58,7 +58,7 @@ begin
     '  select ', func_expr_src, ';', E'\n',
     '$function$;'
   );
-  
+
   return func_src;
 end;
 $$;
@@ -128,7 +128,7 @@ create or replace function _pg_json_query._op_func_drop(
   op_name text,
   lhs_oid oid,
   rhs_oid oid,
-  cascade_ boolean default false  
+  cascade_ boolean default false
 ) returns void language plpgsql volatile as $$
 declare
   func_name text;

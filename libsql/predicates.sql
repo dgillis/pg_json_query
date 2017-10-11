@@ -76,7 +76,7 @@ create function _pg_json_query._apply_pred__notin(col anyelement, filt jsonb,
 returns boolean language sql stable as $$
   select not _pg_json_query._apply_pred__in(col, filt, _coltyp);
 $$;
- 
+
 
 -- like
 create function _pg_json_query._apply_pred__like(col anyelement, filt jsonb,

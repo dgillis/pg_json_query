@@ -1,5 +1,5 @@
-  
-  
+
+
 create type _pg_json_query._field_type as (
   column_ text,
   path_arr text[],
@@ -149,7 +149,7 @@ declare
 begin
   parts := regexp_split_to_array(field_op_expr, '__');
   parts_len := array_length(parts, 1);
-  
+
   if parts_len = 1 then
     return _pg_json_query._field_op_type(field_op_expr, 'eq');
   elsif parts_len = 2 then

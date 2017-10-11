@@ -1,0 +1,59 @@
+# Compiled source #
+###################
+*.dll
+*.exe
+*.o
+*.so
+*.py[cod]
+__pycache__/
+node_modules/
+
+# Build files #
+###############
+*.egg-info/
+dist/
+sdist/
+build/lib.linux-*
+*.egg
+
+# Packages #
+############
+# it's better to unpack these files and commit the raw source
+# git has its own built in compression methods
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and backups #
+######################
+*.log
+*.log.*
+*~
+\#*#
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+
+# Misc
+.projectile
+.agignore
+.emacs.desktop
+.emacs.desktop.lock
+.emacs-project-cache
+.tern-project
+.tern-port
+.tern-defs
+*.orig

@@ -33,7 +33,6 @@ language sql immutable
 as $$ select s#>>'{}'; $$;
 
 
-
 -- Concat the two JSONB arrays to form a new one. If either element
 -- is a non-array, it will be treated as a single element array of
 -- that element.
@@ -57,26 +56,25 @@ as $$
         else
           -- e1 is an array, e2 is not.
           case
-            when e1 = '[]' then ('[' || e2 || ']')::jsonb
+            when e1 = '[]' then ('[' || e2::text || ']')::jsonb
             else
               -- e1 non-empty.
-              (left(e1::text, -1) || ', ' || e2 || ']')::jsonb
+              (left(e1::text, -1) || ', ' || e2::text || ']')::jsonb
             end
         end
     when jsonb_typeof(e2) = 'array' then
       -- e2 is an array, e1 is not.
       case
-        when e2 = '[]' then ('[' || e1 || ']')::jsonb
+        when e2 = '[]' then ('[' || e1::text || ']')::jsonb
         else
           -- e2 non-empty.
-          ('[' || e1 || ', ' || right(e2::text, -1))::jsonb
+          ('[' || e1::text || ', ' || right(e2::text, -1))::jsonb
         end
     else
       -- Neither are arrays
-      ('[' || e1 || ', ' || e2 || ']')::jsonb
+      ('[' || e1::text || ', ' || e2::text || ']')::jsonb
     end;
 $$;
-
 
 
 create function _pg_json_query._to_text(val jsonb)
@@ -127,3 +125,6 @@ language sql immutable as $$
       false
     end;
 $$;
+
+
+

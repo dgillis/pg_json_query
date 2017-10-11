@@ -1,0 +1,1 @@
+To install: sudo env "PATH=$PATH" make install

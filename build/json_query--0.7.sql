@@ -1,5 +1,6 @@
 
 create schema _pg_json_query;
+grant usage on schema _pg_json_query to public;
 
 create function _pg_json_query._jsonb_arr_to_text_arr(arr jsonb)
 returns text[] language sql immutable
@@ -32,10 +33,7 @@ $$;
 create function _pg_json_query._json_string_to_text(s jsonb)
 returns text
 language sql immutable
-as $$
-  select ('[' || s || ']')::jsonb->>0;
-$$;
-
+as $$ select s#>>'{}'; $$;
 
 
 -- Concat the two JSONB arrays to form a new one. If either element
@@ -61,26 +59,25 @@ as $$
         else
           -- e1 is an array, e2 is not.
           case
-            when e1 = '[]' then ('[' || e2 || ']')::jsonb
+            when e1 = '[]' then ('[' || e2::text || ']')::jsonb
             else
               -- e1 non-empty.
-              (left(e1::text, -1) || ', ' || e2 || ']')::jsonb
+              (left(e1::text, -1) || ', ' || e2::text || ']')::jsonb
             end
         end
     when jsonb_typeof(e2) = 'array' then
       -- e2 is an array, e1 is not.
       case
-        when e2 = '[]' then ('[' || e1 || ']')::jsonb
+        when e2 = '[]' then ('[' || e1::text || ']')::jsonb
         else
           -- e2 non-empty.
-          ('[' || e1 || ', ' || right(e2::text, -1))::jsonb
+          ('[' || e1::text || ', ' || right(e2::text, -1))::jsonb
         end
     else
       -- Neither are arrays
-      ('[' || e1 || ', ' || e2 || ']')::jsonb
+      ('[' || e1::text || ', ' || e2::text || ']')::jsonb
     end;
 $$;
-
 
 
 create function _pg_json_query._to_text(val jsonb)
@@ -131,6 +128,9 @@ language sql immutable as $$
       false
     end;
 $$;
+
+
+
 
 
 create type _pg_json_query._field_type as (
@@ -722,7 +722,7 @@ create or replace view _pg_json_query._default_row_types as (
   from pg_type t join pg_namespace n on t.typnamespace = n.oid
   where
     n.nspname = 'pg_catalog' and -- built-ins
-    typcategory not in ('A', 'P', 'x') and -- neither arrays, psuedo nor unknown
+    typcategory not in ('P', 'x') and -- neither psuedo nor unknown
     typname::text !~* '^pg_.*' and -- non-internal
     typisdefined -- is defined
 );
@@ -752,7 +752,7 @@ language sql stable as $$
           -- If not symmetric, lhs_type must be included.
           (info->>'lhs_type')::regtype::oid
       end as rhs_oid
-    from jsonb_each_text(_pg_json_query._core_ops()) _(op_name, info)
+    from jsonb_each(_pg_json_query._core_ops()) _(op_name, info)
   ) _;
 $$;
 
@@ -1133,7 +1133,7 @@ returns boolean
 language sql stable
 as $$
   select case
-    when filt->'path' = 'null' then
+    when (filt->>'path') is null then
       _pg_json_query._apply_filter(col, filt, null::jsonb)
     when filt->'path_is_text' = 'true' then
       _pg_json_query._apply_filter(
@@ -1165,7 +1165,12 @@ $$;
 create or replace function _pg_json_query._filter_row_column(
   row_ anyelement,
   filt jsonb
-) returns boolean language sql stable as $$
+)
+returns boolean
+language sql
+stable
+cost 1000000
+as $$
   select
     case
       when filt is null then
@@ -1182,8 +1187,11 @@ $$;
 create or replace function _pg_json_query._filter_row_impl(
   row_ anyelement,
   filts jsonb
-) returns boolean
-language sql stable
+)
+returns boolean
+language sql
+stable
+cost 1000000
 as $$
   select
     _pg_json_query._filter_row_column(row_, filts->0) and
@@ -1201,10 +1209,36 @@ as $$
 $$;
 
 
+-- The jq_filter() is having some performance issues stemming from the
+-- string processing of the filter object preventing inlining.  This
+-- function takes a JSONB array of filter objects already in the internal
+-- form, with "field", "op", "value" being required and "path", "path_is_text"
+-- being optional.
+create or replace function jq_filter_raw(
+  row_ anyelement,
+  filts jsonb
+)
+returns boolean
+language sql
+stable
+cost 1000000
+as $$
+   select _pg_json_query._filter_row_impl(row_, filts);
+$$;
+
+
 -- Convert one of the filter objects from the user input format into a JSONB
 -- array of _filter_type-like JSONB objects.
+--
+-- NOTE: It appears that in many cases this function prevents inlining.
+--   It looks like the implementation makes no difference when PLPGSQL is used
+--   since even changing the function to a constant "return XXXX" prevents
+--   inlining. Try and see if an SQL implementation can get over this.
 create or replace function _pg_json_query._parse_filter_obj_to_json(obj jsonb)
-returns jsonb language plpgsql immutable as $$
+returns jsonb
+language plpgsql
+stable
+as $$
 declare
   and_arr jsonb;
   dj_arr jsonb;
@@ -1260,7 +1294,11 @@ $$;
 
 -- Wrapper around parse_parse_filter_obj_to_json().
 create or replace function _pg_json_query._parse_filter(typ jsonb, obj jsonb)
-returns jsonb language sql immutable as $$
+returns jsonb
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._parse_filter_obj_to_json(obj);
 $$;
 
@@ -1269,17 +1307,14 @@ $$;
 -- _filter_row_column_impl() for their row-type.
 create or replace function jq_filter(row_ anyelement, filter_obj jsonb)
 returns boolean
-language sql stable
+language sql
+stable
+cost 1000000 -- same as cost of _filter_row_impl
 as $$
-  select case
-    when filter_obj = '{}' then
-      true
-    else
-      _pg_json_query._filter_row_impl(
-        row_,
-        _pg_json_query._parse_filter_obj_to_json(filter_obj)
-    )
-  end;
+  select _pg_json_query._filter_row_impl(
+    row_,
+    _pg_json_query._parse_filter_obj_to_json(filter_obj)
+  );
 $$;
 
 
@@ -1309,11 +1344,16 @@ value for the specified field.
 
 
 -- _jq_extract_helper(row<anyelement>, fld<fldexpr|fldtype>, typ<*>)
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fld _pg_json_query._field_type,
   typ jsonb
-) returns jsonb language sql immutable as $$
+)
+returns jsonb
+language sql
+stable
+cost 1000000
+as $$
   select case fld.path_arr_len
     when 0 then
       _pg_json_query._jq_col_val_impl(row_, fld.column_, typ)
@@ -1325,11 +1365,16 @@ create function _pg_json_query._jq_val_helper(
     end;
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fld _pg_json_query._field_type,
   typ json
-) returns json language sql immutable as $$
+)
+returns json
+language sql
+stable
+cost 1000000
+as $$
   select case fld.path_arr_len
     when 0 then
       _pg_json_query._jq_col_val_impl(row_, fld.column_, typ)
@@ -1341,11 +1386,16 @@ create function _pg_json_query._jq_val_helper(
     end;
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fld _pg_json_query._field_type,
   typ text
-) returns text language sql immutable as $$
+)
+returns text
+language sql
+stable
+cost 1000000
+as $$
   select case fld.path_arr_len
     when 0 then
       _pg_json_query._jq_col_val_impl(row_, fld.column_, typ)
@@ -1357,31 +1407,46 @@ create function _pg_json_query._jq_val_helper(
     end;
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fldexpr text,
   typ jsonb
-) returns jsonb language sql immutable as $$
+)
+returns jsonb
+language sql
+stable
+cost 100000
+as $$
   select _pg_json_query._jq_val_helper(
     row_, _pg_json_query._field_type(fldexpr), typ
   );
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fldexpr text,
   typ json
-) returns json language sql immutable as $$
+)
+returns json
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._jq_val_helper(
     row_, _pg_json_query._field_type(fldexpr), typ
   );
 $$;
 
-create function _pg_json_query._jq_val_helper(
+create or replace function _pg_json_query._jq_val_helper(
   row_ anyelement,
   fldexpr text,
   typ text
-) returns text language sql immutable as $$
+)
+returns text
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._jq_val_helper(
     row_, _pg_json_query._field_type(fldexpr), typ
   );
@@ -1392,29 +1457,39 @@ $$;
 -- text version.
 -- To use with a row type, implement json_col_base_value_impl(text, <rowtype>, text)
 -- that returns a textual representation of the specified column.
---create function _pg_json_query._col_value(valtyp text, row_ anyelement, fld text)
-create function jq_val(row_ anyelement, colname text, typ text)
-returns text language sql immutable as $$
+--create or replace function _pg_json_query._col_value(valtyp text, row_ anyelement, fld text)
+create or replace function jq_val(row_ anyelement, colname text, typ text)
+returns text
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._jq_val_helper(row_, colname, typ);
 $$;
 
 
-create function jq_val(row_ anyelement, colname text, typ jsonb)
-returns jsonb language sql immutable as $$
+create or replace function jq_val(row_ anyelement, colname text, typ jsonb)
+returns jsonb language sql stable as $$
   select _pg_json_query._jq_val_helper(row_, colname, typ);
 $$;
 
 
-create function jq_val(row_ anyelement, colname text, typ json)
-returns json language sql immutable as $$
+create or replace function jq_val(row_ anyelement, colname text, typ json)
+returns json
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._jq_val_helper(row_, colname, typ);
 $$;
 
 
 -- Helper for jq_val(row_, jsonb_array) when the arrays are long.
-create function _pg_json_query._jq_val_jsonb_arr(row_ anyelement, arr jsonb)
+create or replace function _pg_json_query._jq_val_jsonb_arr(row_ anyelement, arr jsonb)
 returns jsonb
-language sql immutable
+language sql
+stable
+cost 1000000
 as $$
   select coalesce(json_agg(jq_val(row_, el, null::json)
                            order by idx)::jsonb, '[]')
@@ -1422,109 +1497,142 @@ as $$
 $$;
 
 
-create function jq_val(row_ anyelement, colexpr jsonb, typ jsonb)
+create or replace function jq_val(row_ anyelement, colexpr jsonb, typ jsonb)
 returns jsonb
-language sql immutable
+language plpgsql
+stable
+cost 1000000
 as $$
-  select case jsonb_typeof(colexpr)
-    when 'array' then
-      case jsonb_array_length(colexpr)
-        when 0 then
-          '[]'
-        when 1 then
-           _pg_json_query._build_array(
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'))
-        when 2 then
-           _pg_json_query._build_array(
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'))
-        when 3 then
-           _pg_json_query._build_array(
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>2, typ), 'null'))
-        when 4 then
-           _pg_json_query._build_array(
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>2, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>3, typ), 'null'))
-        when 5 then
-           _pg_json_query._build_array(
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>2, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>3, typ), 'null'),
-             coalesce(
-               _pg_json_query._jq_val_helper(row_, colexpr->>4, typ), 'null'))
-        else
-          _pg_json_query._jq_val_jsonb_arr(row_, colexpr)
-        end
-    else
-      _pg_json_query._jq_val_helper(
-        row_,
-        _pg_json_query._json_string_to_text(colexpr),
-        typ
-      )
-    end;
+declare
+  exprtyp text;
+  arrlen int;
+begin
+  if colexpr = '[]' then
+    return '[]';
+  end if;
+
+  exprtyp := jsonb_typeof(colexpr);
+
+  if jsonb_typeof(colexpr) != 'array' then
+    return _pg_json_query._jq_val_helper(
+      row_,
+      _pg_json_query._json_string_to_text(colexpr),
+      typ
+    );
+  end if;
+
+  arrlen := jsonb_array_length(colexpr);
+
+  if arrlen = 1 then
+     return _pg_json_query._build_array(
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'));
+  elsif arrlen = 2 then
+     return _pg_json_query._build_array(
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'));
+  elsif arrlen = 3 then
+     return _pg_json_query._build_array(
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>2, typ), 'null'));
+  elsif arrlen = 4 then
+     return _pg_json_query._build_array(
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>2, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>3, typ), 'null'));
+  elsif arrlen = 5 then
+     return _pg_json_query._build_array(
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>0, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>1, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>2, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>3, typ), 'null'),
+       coalesce(
+         _pg_json_query._jq_val_helper(row_, colexpr->>4, typ), 'null'));
+  else
+    return _pg_json_query._jq_val_jsonb_arr(row_, colexpr);
+  end if;
+end;
 $$;
 
 
 -- If type is omitted, default to JSONB.
-create function jq_val(row_ anyelement, colname text)
-returns jsonb language sql immutable as $$
+create or replace function jq_val(row_ anyelement, colname text)
+returns jsonb
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._jq_val_helper(row_, colname, null::jsonb);
 $$;
 
 -- If type is omitted, default to JSONB.
-create function jq_val(row_ anyelement, colexpr jsonb)
-returns jsonb language sql immutable as $$
+create or replace function jq_val(row_ anyelement, colexpr jsonb)
+returns jsonb
+language sql
+stable
+cost 1000000
+as $$
   select jq_val(row_, colexpr, null::jsonb);
 $$;
 
-create function jq_val_text(row_ anyelement, colname text)
-returns text language sql immutable as $$
+create or replace function jq_val_text(row_ anyelement, colname text)
+returns text
+language sql
+stable
+cost 1000000
+as $$
   select _pg_json_query._jq_val_helper(row_, colname, null::text);
 $$;
 
 
 
-create function jq_val_text_array(row_ anyelement, arr text[])
+create or replace function jq_val_text_array(row_ anyelement, arr text[])
 returns text[]
-language sql immutable
+language sql
+stable
+cost 1000000
 as $$
   select coalesce(array_agg(jq_val_text(row_, el) order by idx), '{}')::text[]
   from unnest(arr) with ordinality o(el, idx);
 $$;
 
 
-create function jq_val(row_ anyelement, arr text[], typ jsonb)
-returns jsonb language sql immutable as $$
+create or replace function jq_val(row_ anyelement, arr text[], typ jsonb)
+returns jsonb
+language sql
+stable
+cost 1000000
+as $$
   select jq_val(row_, to_json(arr)::jsonb, typ);
 $$;
 
 
-create function jq_val(row_ anyelement, arr text[], typ text)
-returns text[] language sql immutable as $$
+create or replace function jq_val(row_ anyelement, arr text[], typ text)
+returns text[]
+language sql
+stable
+cost 1000000
+as $$
   select jq_val_text_array(row_, arr);
 $$;
 
 
-create function jq_concat_val_args(e1 jsonb, e2 jsonb)
+create or replace function jq_concat_val_args(e1 jsonb, e2 jsonb)
 returns jsonb
 language sql immutable
 as $$
@@ -1536,6 +1644,7 @@ as $$
       _pg_json_query._jsonb_array_concat(e1, e2)
     end;
 $$;
+
 
 
 create function _pg_json_query._validate_attr_name(attrname text)

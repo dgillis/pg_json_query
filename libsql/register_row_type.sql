@@ -86,12 +86,12 @@ begin
       quote_literal(attrname), quote_ident(attrname)))
     from _pg_json_query._get_type_attrs(full_type_name)
   ));
-  
+
   col_not_exists_expr := format(
     '_pg_json_query._filter_attr_not_exists_handler(%s, fld)',
     quote_literal(full_type_name)
   );
-  
+
   return concat(
      'create or replace function ',
      '_pg_json_query._filter_row_column_impl(',
@@ -141,16 +141,16 @@ begin
     concat('    when ', attrname_lit, ' then ', casted_expr, E'\n')
   ) into attr_exprs
   from casted_exprs;
-  
+
   attr_not_exists_expr := format(
     '_pg_json_query._colval_attr_not_exists_handler(null::%s, %s, fld)',
     to_type_name, quote_literal(full_type_name)
   );
-  
+
   return concat(
      'create or replace function _pg_json_query._jq_col_val_impl(',
          'row_ ', full_type_name, ','
-         'fld text, ', 
+         'fld text, ',
          'valtyp ', to_type_name,
       ')', E'\n',
      'returns ', to_type_name, ' language sql stable as $f$', E'\n',
@@ -173,7 +173,7 @@ begin
   -- Create or replace the filter_row_column_impl() function for the type.
   stmt := _pg_json_query._get_filter_row_column_impl_defn(full_type_name);
   execute stmt;
-  
+
   -- Create or replace the filter_row_column_impl() functions for the type.
   stmt := _pg_json_query._get_col_value_impl_defn(full_type_name, 'text');
   execute stmt;
@@ -205,15 +205,15 @@ begin
   execute format(
     'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, text)',
     full_type_name);
-  
+
   execute format(
     'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, jsonb)',
     full_type_name);
-  
+
   execute format(
     'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, json)',
     full_type_name);
-  
+
   return true;
 end;
 $$;

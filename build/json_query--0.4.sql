@@ -130,8 +130,8 @@ language sql immutable as $$
       false
     end;
 $$;
-  
-  
+
+
 create type _pg_json_query._field_type as (
   column_ text,
   path_arr text[],
@@ -281,7 +281,7 @@ declare
 begin
   parts := regexp_split_to_array(field_op_expr, '__');
   parts_len := array_length(parts, 1);
-  
+
   if parts_len = 1 then
     return _pg_json_query._field_op_type(field_op_expr, 'eq');
   elsif parts_len = 2 then
@@ -715,7 +715,7 @@ $$;
 -- rows consist of a textual representation of the type (suitable to
 -- substitute into dynamic SQL) and the types OID.
 create or replace view _pg_json_query._default_row_types as (
-  select    
+  select
     t.oid::regtype::text as type_name,
     t.oid as type_oid
   from pg_type t join pg_namespace n on t.typnamespace = n.oid
@@ -751,7 +751,7 @@ language sql stable as $$
           -- If not symmetric, lhs_type must be included.
           (info->>'lhs_type')::regtype::oid
       end as rhs_oid
-    from jsonb_each_text(_pg_json_query._core_ops()) _(op_name, info)
+    from jsonb_each(_pg_json_query._core_ops()) _(op_name, info)
   ) _;
 $$;
 
@@ -961,7 +961,7 @@ create function _pg_json_query._apply_pred__notin(col anyelement, filt jsonb,
 returns boolean language sql stable as $$
   select not _pg_json_query._apply_pred__in(col, filt, _coltyp);
 $$;
- 
+
 
 -- like
 create function _pg_json_query._apply_pred__like(col anyelement, filt jsonb,
@@ -1112,7 +1112,7 @@ returns boolean language sql stable as $$
     else null
     end;
 $$;
-  
+
 -- General form for _apply_filter(). Type-specific implementations omit the
 -- third argument from their call signature so that they can make a call to
 -- this method after doing any type-specific preprocessing (e.g., see the json
@@ -1174,7 +1174,7 @@ as $$
     case
       when filt is null then
         true
-      else 
+      else
         _pg_json_query._filter_row_column_impl(filt->>'field', row_, filt)
     end;
 $$;
@@ -1229,13 +1229,13 @@ begin
 
     arr := and_arr;
   end if;
-  
+
   select json_agg(
     _pg_json_query._filt_to_json(_pg_json_query._filt_type(key, value))
   ) into dj_arr
   from jsonb_each(obj)
   where left(key, 1) != '$';
-  
+
   if dj_arr is not null then
      arr := case
        when arr is null then
@@ -1244,14 +1244,14 @@ begin
          _pg_json_query._jsonb_array_concat(arr, dj_arr)
        end;
   end if;
-  
+
   if obj ? '$field' or obj ? '$op' or obj ? '$value' then
     expl_filt := _pg_json_query._filt_to_json(_pg_json_query._filt_type(
       obj->>'$field',
       obj->>'$op',
       obj->'$value'
     ));
-    
+
     arr := case
       when arr is null then
         _pg_json_query._build_array(expl_filt)
@@ -1259,7 +1259,7 @@ begin
         _pg_json_query._jsonb_array_concat(arr, expl_filt)
       end;
   end if;
-  
+
   return coalesce(arr, '[]');
 end;
 $$;
@@ -1360,7 +1360,7 @@ as $$
 $$;
 
 create function _pg_json_query._jq_val_helper(
-  row_ anyelement, 
+  row_ anyelement,
   fld _pg_json_query._field_type,
   typ text
 )
@@ -1369,7 +1369,7 @@ language sql
 stable
 cost 1000000 as $$
   select case fld.path_arr_len
-    when 0 then 
+    when 0 then
       _pg_json_query._jq_col_val_impl(row_, fld.column_, typ)
     else
       _pg_json_query._field_extract_text_from_column(
@@ -1492,9 +1492,9 @@ begin
       typ
     );
   end if;
-  
+
   arrlen := jsonb_array_length(colexpr);
-  
+
   if arrlen = 1 then
      return _pg_json_query._build_array(
        coalesce(
@@ -1705,12 +1705,12 @@ begin
       quote_literal(attrname), quote_ident(attrname)))
     from _pg_json_query._get_type_attrs(full_type_name)
   ));
-  
+
   col_not_exists_expr := format(
     '_pg_json_query._filter_attr_not_exists_handler(%s, fld)',
     quote_literal(full_type_name)
   );
-  
+
   return concat(
      'create or replace function ',
      '_pg_json_query._filter_row_column_impl(',
@@ -1760,16 +1760,16 @@ begin
     concat('    when ', attrname_lit, ' then ', casted_expr, E'\n')
   ) into attr_exprs
   from casted_exprs;
-  
+
   attr_not_exists_expr := format(
     '_pg_json_query._colval_attr_not_exists_handler(null::%s, %s, fld)',
     to_type_name, quote_literal(full_type_name)
   );
-  
+
   return concat(
      'create or replace function _pg_json_query._jq_col_val_impl(',
          'row_ ', full_type_name, ','
-         'fld text, ', 
+         'fld text, ',
          'valtyp ', to_type_name,
       ')', E'\n',
      'returns ', to_type_name, ' language sql stable as $f$', E'\n',
@@ -1792,7 +1792,7 @@ begin
   -- Create or replace the filter_row_column_impl() function for the type.
   stmt := _pg_json_query._get_filter_row_column_impl_defn(full_type_name);
   execute stmt;
-  
+
   -- Create or replace the filter_row_column_impl() functions for the type.
   stmt := _pg_json_query._get_col_value_impl_defn(full_type_name, 'text');
   execute stmt;
@@ -1824,15 +1824,15 @@ begin
   execute format(
     'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, text)',
     full_type_name);
-  
+
   execute format(
     'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, jsonb)',
     full_type_name);
-  
+
   execute format(
     'drop function if exists _pg_json_query._jq_col_val_impl(%s, text, json)',
     full_type_name);
-  
+
   return true;
 end;
 $$;
@@ -1879,7 +1879,7 @@ begin
   func_name := _pg_json_query._op_func_name(op_name);
   lhs_type_name := lhs_oid::regtype::text;
   rhs_type_name := rhs_oid::regtype::text;
-  
+
   func_expr_src := case
     when op_exists then
       concat('x ', op, ' y')
@@ -1896,7 +1896,7 @@ begin
     '  select ', func_expr_src, ';', E'\n',
     '$function$;'
   );
-  
+
   return func_src;
 end;
 $$;
@@ -1966,7 +1966,7 @@ create or replace function _pg_json_query._op_func_drop(
   op_name text,
   lhs_oid oid,
   rhs_oid oid,
-  cascade_ boolean default false  
+  cascade_ boolean default false
 ) returns void language plpgsql volatile as $$
 declare
   func_name text;
