@@ -38,7 +38,7 @@ CREATE FUNCTION total_outstanding() RETURNS NUMERIC AS $$
 $$ LANGUAGE SQL STABLE;
 ```
 
-It might also be able to apply some restrictions to the purchases we're including:
+It might also be useful to apply some restrictions on the purchases included in the sum:
 
 ```SQL
 -- Includes only purchases made on or after the given date
@@ -62,9 +62,10 @@ Creating all of these repetitive variations on a function is tiresome and so app
 typically construct the query using some programming language specific query-builder.
 
 Query-builders complicate SQL development by forcing database interaction to take place via the
-client language and makes debugging/profiling more difficult since they must deal with programmatically
-generated queries. This extension provides an alternative by allowing the `WHERE` part of a query to be
-parameterized:
+client language and make debugging/profiling more difficult since they must deal with programmatically
+generated queries.
+
+This extension provides an alternative by allowing the `WHERE` part of a query to be parameterized:
 
 ```SQL
 -- This procedure takes an optional argument customizing which rows are included in the aggregate.
@@ -78,7 +79,7 @@ $$ LANGUAGE SQL STABLE;
 This function replaces all of the previous functions:
 
 ```SQL
--- Equivalent to total_outstanding():
+-- Equivalent to the original total_outstanding() procedure:
 SELECT total_outstanding('{}');
 
 -- Equivalent to total_outstanding_since_date('2015-01-01'):
