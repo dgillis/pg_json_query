@@ -3,7 +3,7 @@
 Use JSON objects to generate ```WHERE``` clause expressions.
 
 
-## Overview
+## Why?
 
 PostgreSQL provides no simple way to parameterize a query's ```WHERE``` clause
 which severly limits the reusability of many types of SQL functions.
@@ -19,8 +19,7 @@ CREATE FUNCTION total_outstanding() RETURNS NUMERIC AS $$
 $$ LANGUAGE SQL STABLE;
 ```
 
-It might also be able to apply some restrictions to the purchases we're
-including:
+It might also be able to apply some restrictions to the purchases we're including:
 
 ```SQL
 -- Includes only purchases made on or after the given date
@@ -40,16 +39,22 @@ $$ LANGUAGE SQL STABLE;
 -- ... Etc.
 ```
 
-Creating all of these repetitive variations on a function is tiresome and
-so applications will typically construct the query using some programming
-language specific query-builder
+Creating all of these repetitive variations on a function is tiresome and so applications will
+typically construct the query using some programming language specific query-builder.
+
+Query-builders complicate SQL development by forcing database interaction to take place via the
+client language and makes debugging/profiling more difficult since they must deal with programmatically
+generated queries. This extension provides an alternative by allowing the `WHERE` part of a query to be
+parameterized:
 
 ```SQL
-CREATE FUNCTION total_outstanding(filters JSONB) RETURNS NUMERIC AS $$
+-- This procedure takes an optional argument customizing which rows are included in the aggregate.
+CREATE FUNCTION total_outstanding(filters JSONB DEFAULT '{}') RETURNS NUMERIC AS $$
   SELECT SUM(outstanding_amount)
   FROM purchase p
-  WHERE NOT written_off AND json_query.filter(p, filters);
-$$ LANGUAGE SQL STABLE;```
+  WHERE NOT written_off AND jq_filter(p, filters);
+$$ LANGUAGE SQL STABLE;
+```
 
 This function replaces all of the previous functions:
 
@@ -75,17 +80,17 @@ SELECT total_outstanding('{"purchase_date__ge": "2015-01-01",
 
 ## Performance
 
-All queries made using ```json_query.filter()``` are simplified by Postgres'
+All queries made using ```jq_filter()``` are simplified by Postgres'
 query optimizer to the same expression as would be used with the equivalent
-inline query. So the only performance difference between json_query.filter()
+inline query. So the only performance difference between jq_filter()
 and its inline equivalent is the time it takes the query optimizer to simplify
 the expression, which is typically in the low single-digit milliseconds.
 
 For example, both of the these queries actually use the same query plan, both
-making use of the primary key index. Using ```json_query.filter()```:
+making use of the primary key index. Using ```jq_filter()```:
 
 ```SQL
-EXPLAIN SELECT * FROM customer c WHERE json_query.filter(c, '{"id": 1000}');
+EXPLAIN SELECT * FROM customer c WHERE jq_filter(c, '{"id": 1000}');
 
 -- Output:
 
@@ -108,22 +113,50 @@ EXPLAIN SELECT * FROM customer c WHERE id = 1000;
 --    Index Cond: (id = 1000)
 ```
 
-
 ## API
 
-### Filter object syntax
+### `jq_register_row_type(type_name TEXT)`
+Before any table (or other composite types) can be used with JSON_QUERY, they must first be registered
+with this function. `type_name` should be the full name of the table (i.e., `'schema_name.table_name'`
+if the table is not in the public schema; otherwise, simply `'table_name'`).
 
-#### Django-style
+### `jq_unregister_row_type(type_name TEXT)`
+Unregister a previously registered row type.
+
+**NOTE**: If the table definition of a previously registered table changes, it should be unregistered
+and then registered again.
+
+### `jq_filter(rec ANYELEMENT, filter_object JSONB)`
+
+Returns a boolean indicating whether or not the record matched against the filter object.
+* `rec` should be a row value previously registered via `jq_register_row_type()`.
+* `filter_object` should be a JSONB object specifying a where-clause using Django-style filter syntax.
+
+### `jq_filter_raw(rec ANYELEMENT, filter_object JSONB)`
 
 
+## Installation
 
-To use 
+Clone this repo and from within the base directory, run
+
+```
+>>> make install
+```
+
+to install the JSON_QUERY PostgreSQL extension. Once this is done, the extension can be added
+to a database via [PostgreSQL's `CREATE EXTENSION`](https://www.postgresql.org/docs/9.6/static/sql-createextension.html):
+
+```SQL
+template1=# CREATE EXTENSION json_query;
+```
+
+
 
 Generate a boolean expression based on a JSONB object using Django-style filter syntax so that
 ```SQL
 SELECT *
 FROM tbl t
-WHERE json_query.filter(t, '{"<column>__<op>": <value>}')
+WHERE jq_filter(t, '{"<column>__<op>": <value>}')
 ```
 selects the same rows as
 ```SQL
