@@ -3,7 +3,22 @@
 Use JSON objects to generate SQL ```WHERE``` clause expressions.
 
 
-## Why?
+## Installation
+
+Clone this repo and from within the base directory, run
+
+```
+>>> make install
+```
+
+to install the JSON_QUERY PostgreSQL extension. Once this is done, the extension can be added
+to a database via [PostgreSQL's `CREATE EXTENSION`](https://www.postgresql.org/docs/9.6/static/sql-createextension.html):
+
+```SQL
+template1=# CREATE EXTENSION json_query;
+```
+
+## Overview
 
 PostgreSQL provides no simple way to parameterize a query's ```WHERE``` clause
 which severly limits the reusability of many types of SQL functions.
@@ -76,21 +91,6 @@ And can also perform more complex variations of the original query:
 -- or after Jan. 1, 2015:
 SELECT total_outstanding('{"purchase_date__ge": "2015-01-01",
                            "customer_id__in": ["a","b"]}');
-```
-
-## Installation
-
-Clone this repo and from within the base directory, run
-
-```
->>> make install
-```
-
-to install the JSON_QUERY PostgreSQL extension. Once this is done, the extension can be added
-to a database via [PostgreSQL's `CREATE EXTENSION`](https://www.postgresql.org/docs/9.6/static/sql-createextension.html):
-
-```SQL
-template1=# CREATE EXTENSION json_query;
 ```
 
 ## API
