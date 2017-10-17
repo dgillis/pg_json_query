@@ -113,7 +113,7 @@ object specifying a where-clause using Django-style filter syntax.
 
 ### `jq_filter_raw(rec ANYELEMENT, raw_filter_array JSONB)`
 Performs a filter using a JSONB array of raw filter objects. The raw filter format is more verbose than
-the Django filter syntax more more flexible.
+the Django filter syntax but more flexible.
 
 #### Django-style filter objects
 A *Django-style* filter object is a JSONB object of the form `{"<column>__<op>": <value>, ...}` generating
