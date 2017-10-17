@@ -122,7 +122,7 @@ $$;
 create or replace function _pg_json_query._parse_filter_obj_to_json(obj jsonb)
 returns jsonb
 language plpgsql
-stable
+immutable
 as $$
 declare
   and_arr jsonb;
