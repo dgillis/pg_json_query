@@ -19,6 +19,8 @@ to a database via [PostgreSQL's `CREATE EXTENSION`](https://www.postgresql.org/d
 template1=# CREATE EXTENSION json_query;
 ```
 
+**NOTE**: requires PostgreSQL 9.4 or higher.
+
 ## Overview
 
 PostgreSQL provides no simple way to parameterize a query's ```WHERE``` clause
