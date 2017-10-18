@@ -4,11 +4,6 @@ Use JSON objects to generate SQL ```WHERE``` clause expressions.
 
 ![json_query screenshot](./screenshot.png "json_query")
 
-## License
-The `json_query` PostgreSQL extension is released under the
-[PostgreSQL Licence](http://www.postgresql.org/about/licence/), a
-permissive Open Source license, similar to the BSD or MIT licenses.
-
 ## Installation
 
 Clone this repo and from within the base directory, run
@@ -200,3 +195,8 @@ EXPLAIN SELECT * FROM customer c WHERE id = 1000;
 ## Examples
 
 See example.sql.
+
+## License
+The `json_query` PostgreSQL extension is released under the
+[PostgreSQL Licence](http://www.postgresql.org/about/licence/), a
+permissive Open Source license, similar to the BSD or MIT licenses.
