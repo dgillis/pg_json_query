@@ -2,6 +2,8 @@
 
 Use JSON objects to generate SQL ```WHERE``` clause expressions.
 
+![Alt text](./screenshot.png "Title")
+
 ## License
 The `json_query` PostgreSQL extension is released under the
 [PostgreSQL Licence](http://www.postgresql.org/about/licence/), a
